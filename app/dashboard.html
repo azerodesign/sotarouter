@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SotaRouter Console — Active Key Pools & Metrics</title>
+  <title>SotaRouter Console | Active Key Pools & Traffic Audit</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +16,18 @@
           fontFamily: {
             sans: ['Geist', 'sans-serif'],
             mono: ['Geist Mono', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#121215',
+              850: '#18181b',
+              800: '#27272a',
+            },
+            emerald: {
+              400: '#34d399',
+              500: '#10b981',
+            }
           }
         }
       }
@@ -26,10 +38,10 @@
     .code-font { font-family: 'Geist Mono', monospace; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between selection:bg-emerald-500/30 selection:text-emerald-300">
 
   <!-- Top App Navigation -->
-  <header class="border-b border-zinc-800 bg-zinc-900/60 sticky top-0 z-50">
+  <header class="border-b border-zinc-800/80 bg-zinc-900/60 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
       <div class="flex items-center gap-6">
         <a href="/index.html" class="flex items-center gap-2">
@@ -37,91 +49,94 @@
           <span class="font-bold tracking-tight text-white">SotaRouter</span>
         </a>
         <nav class="flex items-center gap-4 text-xs font-medium text-zinc-400">
-          <a href="#" class="px-2 py-1 rounded bg-zinc-800 text-white">Dashboard</a>
-          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Key Pools</a>
-          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Routes & Models</a>
-          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Logs</a>
+          <a href="#" class="px-2.5 py-1 rounded bg-zinc-800 text-white font-medium">Dashboard</a>
+          <a href="#" class="px-2.5 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Key Pools</a>
+          <a href="#" class="px-2.5 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Routes & Models</a>
+          <a href="#" class="px-2.5 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Logs & SSE Audit</a>
         </nav>
       </div>
 
       <div class="flex items-center gap-3 font-mono text-xs">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          Gateway Ready (:8080)
+          Engine Active (:8080)
         </span>
       </div>
     </div>
   </header>
 
-  <!-- Dashboard Main Workspace -->
+  <!-- Dashboard Workspace -->
   <main class="max-w-7xl mx-auto px-6 py-8 w-full flex-grow space-y-8">
     
-    <!-- Top Stats Cards -->
+    <!-- Top Metric Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
-        <div class="text-xs text-zinc-400 font-medium">Total Requests (24h)</div>
-        <div class="text-2xl font-bold font-mono text-white" id="stat-requests">142,890</div>
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Requests Served (24h)</div>
+        <div class="text-2xl font-bold font-mono text-white">142,890</div>
         <div class="text-xs text-emerald-400 font-mono">+12.4% vs yesterday</div>
       </div>
 
-      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
-        <div class="text-xs text-zinc-400 font-medium">Average Latency Overhead</div>
-        <div class="text-2xl font-bold font-mono text-white" id="stat-latency">1.14 ms</div>
-        <div class="text-xs text-zinc-500 font-mono">P99: 1.82 ms</div>
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">P99 Added Latency</div>
+        <div class="text-2xl font-bold font-mono text-white">1.14 ms</div>
+        <div class="text-xs text-zinc-500 font-mono">P50: 0.42 ms</div>
       </div>
 
-      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
-        <div class="text-xs text-zinc-400 font-medium">Active Key Pools</div>
-        <div class="text-2xl font-bold font-mono text-white" id="stat-pools">4 Pools / 18 Keys</div>
-        <div class="text-xs text-emerald-400 font-mono">100% Healthy</div>
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Active Pools / Keys</div>
+        <div class="text-2xl font-bold font-mono text-white">4 Pools / 18 Keys</div>
+        <div class="text-xs text-emerald-400 font-mono">17 Ready / 1 Cooldown</div>
       </div>
 
-      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
-        <div class="text-xs text-zinc-400 font-medium">Memory Footprint</div>
-        <div class="text-2xl font-bold font-mono text-white" id="stat-ram">21.4 MB</div>
-        <div class="text-xs text-zinc-500 font-mono">Go Runtime v1.23</div>
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-xl space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">RAM Footprint</div>
+        <div class="text-2xl font-bold font-mono text-white">21.4 MB</div>
+        <div class="text-xs text-zinc-500 font-mono">Goroutines: 42</div>
       </div>
     </div>
 
-    <!-- Main Workspace Split: Add Key Pool Form vs Active Pool List -->
+    <!-- Workspace Split -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       
-      <!-- Left: Key Pool Manager Form -->
-      <div class="lg:col-span-4 bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-4">
-        <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Add API Key to Pool</h2>
+      <!-- Key Pool Registration Form -->
+      <div class="lg:col-span-4 bg-zinc-900 border border-zinc-800 p-5 rounded-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <h2 class="text-xs font-semibold text-white uppercase tracking-wider font-mono">Register API Key</h2>
+          <span class="text-[11px] text-zinc-500 font-mono">Auto-encrypted</span>
+        </div>
         
-        <form id="key-form" class="space-y-4 text-xs">
-          <div class="space-y-1">
-            <label class="block text-zinc-400 font-medium">Provider / Group</label>
-            <select id="provider" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
-              <option value="openai">OpenAI (v1/chat/completions)</option>
-              <option value="anthropic">Anthropic (v1/messages)</option>
-              <option value="gemini">Google Gemini API</option>
-              <option value="custom">Custom Upstream Proxy</option>
+        <form id="key-form" onsubmit="addKey(event)" class="space-y-4 text-xs">
+          <div class="space-y-1.5">
+            <label class="block text-zinc-400 font-medium">Provider / Target Group</label>
+            <select id="provider" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+              <option value="OpenAI">OpenAI (v1/chat/completions)</option>
+              <option value="Anthropic">Anthropic (v1/messages)</option>
+              <option value="Gemini">Google Gemini API</option>
+              <option value="Custom">Custom Upstream Proxy</option>
             </select>
           </div>
 
-          <div class="space-y-1">
-            <label class="block text-zinc-400 font-medium">API Key / Token</label>
-            <input type="password" id="api-key" placeholder="sk-proj-..." class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+          <div class="space-y-1.5">
+            <label class="block text-zinc-400 font-medium">API Key Secret</label>
+            <input type="password" id="api-key" placeholder="sk-proj-..." required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
           </div>
 
-          <div class="space-y-1">
-            <label class="block text-zinc-400 font-medium">Pool Weight / Priority</label>
-            <input type="number" id="weight" value="1" min="1" max="100" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+          <div class="space-y-1.5">
+            <label class="block text-zinc-400 font-medium">Pool Weight (1-100)</label>
+            <input type="number" id="weight" value="10" min="1" max="100" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
           </div>
 
-          <button type="submit" class="w-full py-2.5 rounded bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold transition-colors">
-            Register Key to Pool
+          <button type="submit" class="w-full py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-semibold transition-colors">
+            Add Key to Pool
           </button>
         </form>
       </div>
 
-      <!-- Right: Active Key Pools Table -->
-      <div class="lg:col-span-8 bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Active Key Pools & Health</h2>
-          <span class="text-xs text-zinc-500 font-mono">Auto-cooldown: Active</span>
+      <!-- Active Key Pools Table -->
+      <div class="lg:col-span-8 bg-zinc-900 border border-zinc-800 p-5 rounded-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <h2 class="text-xs font-semibold text-white uppercase tracking-wider font-mono">Key Pools & Health Monitor</h2>
+          <span class="text-[11px] text-zinc-500 font-mono">Cooldown trigger: 429 / 5xx</span>
         </div>
 
         <div class="overflow-x-auto">
@@ -132,7 +147,7 @@
                 <th class="p-3">Key Identifier</th>
                 <th class="p-3">Status</th>
                 <th class="p-3">Requests</th>
-                <th class="p-3">Actions</th>
+                <th class="p-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody id="pool-table-body" class="divide-y divide-zinc-800 text-zinc-300">
@@ -141,21 +156,21 @@
                 <td class="p-3 text-zinc-400">sk-proj-****8491</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span></td>
                 <td class="p-3">48,102</td>
-                <td class="p-3 text-zinc-500"><button class="hover:text-rose-400">Disable</button></td>
+                <td class="p-3 text-right text-zinc-500"><button onclick="removeRow(this)" class="hover:text-rose-400">Revoke</button></td>
               </tr>
               <tr>
                 <td class="p-3 font-semibold text-white">Anthropic</td>
                 <td class="p-3 text-zinc-400">sk-ant-****9201</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span></td>
                 <td class="p-3">32,840</td>
-                <td class="p-3 text-zinc-500"><button class="hover:text-rose-400">Disable</button></td>
+                <td class="p-3 text-right text-zinc-500"><button onclick="removeRow(this)" class="hover:text-rose-400">Revoke</button></td>
               </tr>
               <tr>
                 <td class="p-3 font-semibold text-white">Gemini</td>
                 <td class="p-3 text-zinc-400">AIzaSy****1042</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">COOLDOWN (429)</span></td>
                 <td class="p-3">12,410</td>
-                <td class="p-3 text-zinc-500"><button class="hover:text-emerald-400">Reset</button></td>
+                <td class="p-3 text-right text-zinc-500"><button onclick="resetRow(this)" class="hover:text-emerald-400">Reset Cooldown</button></td>
               </tr>
             </tbody>
           </table>
@@ -164,26 +179,65 @@
 
     </div>
 
-    <!-- Live Traffic Stream / Logs Panel -->
-    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Live Traffic & SSE Stream Audit</h2>
-        <span class="text-xs text-zinc-500 font-mono">Passthrough Latency Monitor</span>
+    <!-- Live SSE Stream Audit Console -->
+    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-xl space-y-3">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <h2 class="text-xs font-semibold text-white uppercase tracking-wider font-mono">Live Traffic & Failover Audit</h2>
+        <span class="text-[11px] text-zinc-500 font-mono">Zero-Buffering Passthrough</span>
       </div>
       
-      <div id="log-console" class="bg-zinc-950 border border-zinc-850 p-4 rounded text-xs font-mono text-zinc-400 space-y-1 max-h-48 overflow-y-auto">
-        <p><span class="text-zinc-600">[00:32:10]</span> <span class="text-emerald-400">POST /v1/chat/completions</span> -> Provider: OpenAI (sk-proj-****8491) | TTFB: 11ms | Status: 200 OK</p>
-        <p><span class="text-zinc-600">[00:32:12]</span> <span class="text-emerald-400">POST /v1/messages</span> -> Provider: Anthropic (sk-ant-****9201) | TTFB: 14ms | Status: 200 OK</p>
-        <p><span class="text-zinc-600">[00:32:15]</span> <span class="text-amber-400">POST /v1/chat/completions</span> -> Provider: Gemini | Error: 429 Rate Limit -> Triggered Auto-Cooldown (60s) -> Failover to OpenAI (sk-proj-****8491)</p>
+      <div id="log-console" class="bg-zinc-950 border border-zinc-800 p-4 rounded-lg text-xs font-mono text-zinc-400 space-y-1.5 max-h-52 overflow-y-auto">
+        <p><span class="text-zinc-600">[00:32:10]</span> <span class="text-emerald-400">POST /v1/chat/completions</span> &rarr; OpenAI (sk-proj-****8491) | TTFB: 11ms | Status: 200 OK</p>
+        <p><span class="text-zinc-600">[00:32:12]</span> <span class="text-emerald-400">POST /v1/messages</span> &rarr; Anthropic (sk-ant-****9201) | TTFB: 14ms | Status: 200 OK</p>
+        <p><span class="text-zinc-600">[00:32:15]</span> <span class="text-amber-400">POST /v1/chat/completions</span> &rarr; Gemini | Error: 429 Rate Limit &rarr; Auto-Cooldown Triggered (60s) &rarr; Failover to OpenAI (sk-proj-****8491)</p>
       </div>
     </div>
 
   </main>
 
-  <!-- Simple Footer -->
-  <footer class="border-t border-zinc-800 py-4 bg-zinc-950 text-center text-xs font-mono text-zinc-500">
-    SotaRouter Dashboard — Pure Go High-Performance AI Router
+  <footer class="border-t border-zinc-800/80 py-4 bg-zinc-950 text-center text-xs font-mono text-zinc-500">
+    SotaRouter Console v1.0 — Pure Go High-Performance AI Router
   </footer>
 
+  <script>
+    function addKey(e) {
+      e.preventDefault();
+      const provider = document.getElementById('provider').value;
+      const key = document.getElementById('api-key').value;
+      const maskedKey = key.substring(0, 7) + '****' + key.substring(key.length - 4);
+      
+      const tbody = document.getElementById('pool-table-body');
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-zinc-800';
+      tr.innerHTML = `
+        <td class="p-3 font-semibold text-white">${provider}</td>
+        <td class="p-3 text-zinc-400">${maskedKey}</td>
+        <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span></td>
+        <td class="p-3">0</td>
+        <td class="p-3 text-right text-zinc-500"><button onclick="removeRow(this)" class="hover:text-rose-400">Revoke</button></td>
+      `;
+      tbody.appendChild(tr);
+
+      // Add log
+      const consoleLog = document.getElementById('log-console');
+      const time = new Date().toTimeString().split(' ')[0];
+      const p = document.createElement('p');
+      p.innerHTML = `<span class="text-zinc-600">[${time}]</span> <span class="text-emerald-400">KEY_REGISTERED</span> &rarr; Provider: ${provider} (${maskedKey}) added to pool.`;
+      consoleLog.appendChild(p);
+
+      document.getElementById('api-key').value = '';
+    }
+
+    function removeRow(btn) {
+      const row = btn.closest('tr');
+      row.remove();
+    }
+
+    function resetRow(btn) {
+      const row = btn.closest('tr');
+      const statusTd = row.children[2];
+      statusTd.innerHTML = '<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span>';
+    }
+  </script>
 </body>
 </html>
