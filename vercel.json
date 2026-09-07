@@ -2,18 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "app/**",
-      "use": "@vercel/static"
+      "src": "web/package.json",
+      "use": "@vercel/next"
     }
   ],
   "routes": [
     {
-      "src": "/dashboard",
-      "dest": "/app/dashboard.html"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/app/$1"
+      "dest": "/web/$1"
     }
   ]
 }
