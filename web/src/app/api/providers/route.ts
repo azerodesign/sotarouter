@@ -1,58 +1,79 @@
 import { NextResponse } from "next/server";
 
-// In-memory provider storage for SotaRouter
-let memoryProviders: any[] = [];
+type JsonRecord = Record<string, unknown>;
+type StoredProvider = {
+  id: string;
+  provider: string;
+  authType: string;
+  name: string;
+  email: string;
+  priority: number;
+  isActive: boolean;
+  testStatus: string;
+  lastError: string | null;
+  data: JsonRecord;
+  createdAt: string;
+};
+
+const asRecord = (value: unknown): JsonRecord => (
+  value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}
+);
+const text = (value: unknown, fallback = "") => typeof value === "string" ? value : fallback;
+const integer = (value: unknown, fallback = 1) => typeof value === "number" && Number.isFinite(value) ? value : fallback;
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Unexpected provider error";
+const sensitiveKey = /(access.?token|refresh.?token|api.?key|secret|authorization|password)/i;
+const publicProvider = (provider: StoredProvider) => ({
+  ...provider,
+  data: Object.fromEntries(Object.entries(provider.data).map(([key, value]) => [key, sensitiveKey.test(key) ? "[redacted]" : value])),
+});
+const publicProviders = () => memoryProviders.map(publicProvider);
+
+let memoryProviders: StoredProvider[] = [];
 
 export async function GET() {
-  return NextResponse.json({ success: true, count: memoryProviders.length, providers: memoryProviders });
+  return NextResponse.json({ success: true, count: memoryProviders.length, providers: publicProviders() });
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = asRecord(await req.json());
 
     if (body.action === "import_json") {
-      // User pasted raw JSON (array of 9Router providerConnections or custom JSON)
-      let items: any[] = [];
-      if (Array.isArray(body.data)) {
-        items = body.data;
-      } else if (typeof body.data === "object" && body.data !== null) {
-        items = body.data.providerConnections || body.data.providers || [body.data];
-      }
-
+      const source = asRecord(body.data);
+      const rawItems = Array.isArray(body.data)
+        ? body.data
+        : source.providerConnections ?? source.providers ?? [body.data];
+      const items = Array.isArray(rawItems) ? rawItems : [];
       let importedCount = 0;
-      items.forEach((p: any) => {
-        let parsedData = {};
-        if (typeof p.data === "string") {
-          try { parsedData = JSON.parse(p.data); } catch (e) {}
-        } else if (typeof p.data === "object" && p.data !== null) {
-          parsedData = p.data;
+
+      items.forEach((item) => {
+        const provider = asRecord(item);
+        let data = asRecord(provider.data);
+        if (typeof provider.data === "string") {
+          try { data = asRecord(JSON.parse(provider.data)); } catch { data = {}; }
         }
 
-        const formatted = {
-          id: p.id || "sota_prov_" + Math.random().toString(36).substring(2, 9),
-          provider: p.provider || "openai",
-          authType: p.authType || "apikey",
-          name: p.name || p.email || p.displayName || p.provider,
-          email: p.email || (parsedData as any).displayName || "",
-          priority: p.priority || 1,
-          isActive: p.isActive === undefined ? true : Boolean(p.isActive),
-          testStatus: (parsedData as any).testStatus || p.testStatus || "active",
-          lastError: (parsedData as any).lastError || null,
-          data: parsedData,
-          createdAt: p.createdAt || new Date().toISOString(),
+        const formatted: StoredProvider = {
+          id: text(provider.id, `sota_prov_${Math.random().toString(36).slice(2, 9)}`),
+          provider: text(provider.provider, "openai"),
+          authType: text(provider.authType, "apikey"),
+          name: text(provider.name, text(provider.email, text(provider.displayName, text(provider.provider, "Provider")))),
+          email: text(provider.email, text(data.displayName)),
+          priority: integer(provider.priority),
+          isActive: provider.isActive === undefined ? true : Boolean(provider.isActive),
+          testStatus: text(data.testStatus, text(provider.testStatus, "active")),
+          lastError: text(data.lastError) || text(provider.lastError) || null,
+          data,
+          createdAt: text(provider.createdAt, new Date().toISOString()),
         };
 
-        const existingIdx = memoryProviders.findIndex(ex => ex.id === formatted.id);
-        if (existingIdx >= 0) {
-          memoryProviders[existingIdx] = formatted;
-        } else {
-          memoryProviders.push(formatted);
-        }
+        const existingIdx = memoryProviders.findIndex((existing) => existing.id === formatted.id);
+        if (existingIdx >= 0) memoryProviders[existingIdx] = formatted;
+        else memoryProviders.push(formatted);
         importedCount++;
       });
 
-      return NextResponse.json({ success: true, message: `Successfully imported ${importedCount} provider connections!`, providers: memoryProviders });
+      return NextResponse.json({ success: true, message: `Successfully imported ${importedCount} provider connections`, providers: publicProviders() });
     }
 
     if (body.action === "clear_all") {
@@ -60,36 +81,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "Cleared all providers", providers: [] });
     }
 
-    // Single create / add
-    const newProv = {
-      id: "sota_prov_" + Math.random().toString(36).substring(2, 9),
-      provider: body.provider || "openai",
-      authType: body.authType || "apikey",
-      name: body.name || body.provider,
-      email: body.email || "",
-      priority: body.priority || 1,
+    const newProvider: StoredProvider = {
+      id: `sota_prov_${Math.random().toString(36).slice(2, 9)}`,
+      provider: text(body.provider, "openai"),
+      authType: text(body.authType, "apikey"),
+      name: text(body.name, text(body.provider, "Provider")),
+      email: text(body.email),
+      priority: integer(body.priority),
       isActive: true,
       testStatus: "active",
       lastError: null,
-      data: { apiKey: body.apiKey || "" },
+      data: { apiKey: text(body.apiKey) },
       createdAt: new Date().toISOString(),
     };
-    memoryProviders.push(newProv);
-    return NextResponse.json({ success: true, provider: newProv, providers: memoryProviders });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    memoryProviders.push(newProvider);
+    return NextResponse.json({ success: true, provider: publicProvider(newProvider), providers: publicProviders() });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
 
 export async function DELETE(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-    if (id) {
-      memoryProviders = memoryProviders.filter(p => p.id !== id);
-    }
-    return NextResponse.json({ success: true, providers: memoryProviders });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    const id = new URL(req.url).searchParams.get("id");
+    if (id) memoryProviders = memoryProviders.filter((provider) => provider.id !== id);
+    return NextResponse.json({ success: true, providers: publicProviders() });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 });
   }
 }
