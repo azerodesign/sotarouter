@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SotaRouter Console — Active Key Pools & Metrics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist', 'sans-serif'],
+            mono: ['Geist Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Geist', sans-serif; background-color: #09090b; color: #f4f4f5; }
+    .code-font { font-family: 'Geist Mono', monospace; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between">
+
+  <!-- Top App Navigation -->
+  <header class="border-b border-zinc-800 bg-zinc-900/60 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="/index.html" class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold font-mono text-xs">S</div>
+          <span class="font-bold tracking-tight text-white">SotaRouter</span>
+        </a>
+        <nav class="flex items-center gap-4 text-xs font-medium text-zinc-400">
+          <a href="#" class="px-2 py-1 rounded bg-zinc-800 text-white">Dashboard</a>
+          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Key Pools</a>
+          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Routes & Models</a>
+          <a href="#" class="px-2 py-1 rounded hover:bg-zinc-800 hover:text-white transition-colors">Logs</a>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-3 font-mono text-xs">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Gateway Ready (:8080)
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Dashboard Main Workspace -->
+  <main class="max-w-7xl mx-auto px-6 py-8 w-full flex-grow space-y-8">
+    
+    <!-- Top Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Total Requests (24h)</div>
+        <div class="text-2xl font-bold font-mono text-white" id="stat-requests">142,890</div>
+        <div class="text-xs text-emerald-400 font-mono">+12.4% vs yesterday</div>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Average Latency Overhead</div>
+        <div class="text-2xl font-bold font-mono text-white" id="stat-latency">1.14 ms</div>
+        <div class="text-xs text-zinc-500 font-mono">P99: 1.82 ms</div>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Active Key Pools</div>
+        <div class="text-2xl font-bold font-mono text-white" id="stat-pools">4 Pools / 18 Keys</div>
+        <div class="text-xs text-emerald-400 font-mono">100% Healthy</div>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 p-4 rounded-lg space-y-1">
+        <div class="text-xs text-zinc-400 font-medium">Memory Footprint</div>
+        <div class="text-2xl font-bold font-mono text-white" id="stat-ram">21.4 MB</div>
+        <div class="text-xs text-zinc-500 font-mono">Go Runtime v1.23</div>
+      </div>
+    </div>
+
+    <!-- Main Workspace Split: Add Key Pool Form vs Active Pool List -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      
+      <!-- Left: Key Pool Manager Form -->
+      <div class="lg:col-span-4 bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-4">
+        <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Add API Key to Pool</h2>
+        
+        <form id="key-form" class="space-y-4 text-xs">
+          <div class="space-y-1">
+            <label class="block text-zinc-400 font-medium">Provider / Group</label>
+            <select id="provider" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+              <option value="openai">OpenAI (v1/chat/completions)</option>
+              <option value="anthropic">Anthropic (v1/messages)</option>
+              <option value="gemini">Google Gemini API</option>
+              <option value="custom">Custom Upstream Proxy</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="block text-zinc-400 font-medium">API Key / Token</label>
+            <input type="password" id="api-key" placeholder="sk-proj-..." class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+          </div>
+
+          <div class="space-y-1">
+            <label class="block text-zinc-400 font-medium">Pool Weight / Priority</label>
+            <input type="number" id="weight" value="1" min="1" max="100" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-200 focus:outline-none focus:border-emerald-500 font-mono">
+          </div>
+
+          <button type="submit" class="w-full py-2.5 rounded bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold transition-colors">
+            Register Key to Pool
+          </button>
+        </form>
+      </div>
+
+      <!-- Right: Active Key Pools Table -->
+      <div class="lg:col-span-8 bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Active Key Pools & Health</h2>
+          <span class="text-xs text-zinc-500 font-mono">Auto-cooldown: Active</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
+              <tr>
+                <th class="p-3">Provider</th>
+                <th class="p-3">Key Identifier</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">Requests</th>
+                <th class="p-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pool-table-body" class="divide-y divide-zinc-800 text-zinc-300">
+              <tr>
+                <td class="p-3 font-semibold text-white">OpenAI</td>
+                <td class="p-3 text-zinc-400">sk-proj-****8491</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span></td>
+                <td class="p-3">48,102</td>
+                <td class="p-3 text-zinc-500"><button class="hover:text-rose-400">Disable</button></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-semibold text-white">Anthropic</td>
+                <td class="p-3 text-zinc-400">sk-ant-****9201</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">READY</span></td>
+                <td class="p-3">32,840</td>
+                <td class="p-3 text-zinc-500"><button class="hover:text-rose-400">Disable</button></td>
+              </tr>
+              <tr>
+                <td class="p-3 font-semibold text-white">Gemini</td>
+                <td class="p-3 text-zinc-400">AIzaSy****1042</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">COOLDOWN (429)</span></td>
+                <td class="p-3">12,410</td>
+                <td class="p-3 text-zinc-500"><button class="hover:text-emerald-400">Reset</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Live Traffic Stream / Logs Panel -->
+    <div class="bg-zinc-900 border border-zinc-800 p-5 rounded-lg space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-white uppercase tracking-wider font-mono">Live Traffic & SSE Stream Audit</h2>
+        <span class="text-xs text-zinc-500 font-mono">Passthrough Latency Monitor</span>
+      </div>
+      
+      <div id="log-console" class="bg-zinc-950 border border-zinc-850 p-4 rounded text-xs font-mono text-zinc-400 space-y-1 max-h-48 overflow-y-auto">
+        <p><span class="text-zinc-600">[00:32:10]</span> <span class="text-emerald-400">POST /v1/chat/completions</span> -> Provider: OpenAI (sk-proj-****8491) | TTFB: 11ms | Status: 200 OK</p>
+        <p><span class="text-zinc-600">[00:32:12]</span> <span class="text-emerald-400">POST /v1/messages</span> -> Provider: Anthropic (sk-ant-****9201) | TTFB: 14ms | Status: 200 OK</p>
+        <p><span class="text-zinc-600">[00:32:15]</span> <span class="text-amber-400">POST /v1/chat/completions</span> -> Provider: Gemini | Error: 429 Rate Limit -> Triggered Auto-Cooldown (60s) -> Failover to OpenAI (sk-proj-****8491)</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Simple Footer -->
+  <footer class="border-t border-zinc-800 py-4 bg-zinc-950 text-center text-xs font-mono text-zinc-500">
+    SotaRouter Dashboard — Pure Go High-Performance AI Router
+  </footer>
+
+</body>
+</html>
