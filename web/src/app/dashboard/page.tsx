@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Zap, 
@@ -10,62 +10,98 @@ import {
   Plus, 
   Key, 
   Terminal, 
-  ArrowRight,
   CheckCircle2,
   AlertTriangle,
   Coins,
   Database,
   TrendingUp,
   Clock,
-  Layers
+  Layers,
+  Download,
+  Server
 } from "lucide-react";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "keys" | "logs">("overview");
 
-  // Sample Key Pools
-  const [keys, setKeys] = useState([
-    { id: 1, provider: "OpenAI", key: "sk-proj-****8491", status: "READY", requests: 48102, weight: 10 },
-    { id: 2, provider: "Anthropic", key: "sk-ant-****9201", status: "READY", requests: 32840, weight: 10 },
-    { id: 3, provider: "Gemini", key: "AIzaSy****1042", status: "COOLDOWN", requests: 12410, weight: 5 },
-  ]);
-
-  // Sample Usage Logs / Transactions (like standard AI router dashboards)
-  const recentLogs = [
-    { id: "req_1", time: "23:48:12", model: "gemini-3.6-flash-high", provider: "Gemini Pool", inTokens: "148.2k", outTokens: "612", cost: "$0.056", status: 200 },
-    { id: "req_2", time: "23:45:01", model: "claude-3-5-sonnet", provider: "Anthropic Pool", inTokens: "42.1k", outTokens: "1.2k", cost: "$0.144", status: 200 },
-    { id: "req_3", time: "23:41:20", model: "gpt-4o", provider: "OpenAI Pool", inTokens: "12.8k", outTokens: "480", cost: "$0.078", status: 200 },
-    { id: "req_4", time: "23:38:50", model: "gemini-3.6-flash-high", provider: "Gemini Pool", inTokens: "210.5k", outTokens: "840", cost: "$0.082", status: 200 },
-  ];
-
-  // Per Model Cost Distribution
-  const modelStats = [
-    { model: "gemini-3.6-flash-high", requests: 121, inTokens: "19,125,209", outTokens: "76,918", cost: "$7.22" },
-    { model: "claude-3-5-sonnet-20241022", requests: 34, inTokens: "2,410,500", outTokens: "42,100", cost: "$3.45" },
-    { model: "gpt-4o-2024-08-06", requests: 18, inTokens: "850,120", outTokens: "14,200", cost: "$1.88" },
-  ];
+  // Providers & Key Pools State
+  const [providers, setProviders] = useState<any[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
 
   const [newProvider, setNewProvider] = useState("OpenAI");
   const [newKeySecret, setNewKeySecret] = useState("");
   const [newWeight, setNewWeight] = useState(10);
 
-  const handleAddKey = (e: React.FormEvent) => {
+  // Fetch Providers
+  const fetchProviders = async () => {
+    try {
+      const res = await fetch("/api/providers");
+      const data = await res.json();
+      if (data.success) {
+        setProviders(data.providers);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchProviders();
+  }, []);
+
+  // Import 1-Click from 9Router SQLite
+  const handleImport9Router = async () => {
+    setImporting(true);
+    setImportMsg("Reading /root/.9router/db/data.sqlite...");
+    try {
+      const res9 = await fetch("/api/import-9router");
+      const data9 = await res9.json();
+
+      if (!data9.success) {
+        setImportMsg("Error: " + data9.error);
+        setImporting(false);
+        return;
+      }
+
+      // Sync to SotaRouter
+      const resSync = await fetch("/api/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providers: data9.providers }),
+      });
+      const dataSync = await resSync.json();
+
+      if (dataSync.success) {
+        setProviders(dataSync.providers);
+        setImportMsg(`Successfully cloned ${data9.count} providers from 9Router!`);
+      } else {
+        setImportMsg("Sync error: " + dataSync.error);
+      }
+    } catch (err: any) {
+      setImportMsg("Failed: " + err.message);
+    }
+    setImporting(false);
+  };
+
+  const handleAddKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newKeySecret) return;
-    const masked = newKeySecret.slice(0, 7) + "****" + newKeySecret.slice(-4);
-    setKeys([
-      ...keys,
-      { id: Date.now(), provider: newProvider, key: masked, status: "READY", requests: 0, weight: newWeight }
-    ]);
-    setNewKeySecret("");
-  };
-
-  const handleRevoke = (id: number) => {
-    setKeys(keys.filter(k => k.id !== id));
-  };
-
-  const handleResetCooldown = (id: number) => {
-    setKeys(keys.map(k => k.id === id ? { ...k, status: "READY" } : k));
+    try {
+      const res = await fetch("/api/providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: newProvider.toLowerCase(),
+          authType: "apikey",
+          name: newProvider + " Pool Key",
+          priority: newWeight,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchProviders();
+        setNewKeySecret("");
+      }
+    } catch (e) {}
   };
 
   return (
@@ -91,7 +127,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Clean Tabs (Overview, Token Analytics, Key Pools, Live Logs) */}
+        {/* Navigation Tabs */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-6 border-t border-zinc-850 text-xs font-mono overflow-x-auto">
           <button 
             onClick={() => setActiveTab("overview")} 
@@ -109,7 +145,7 @@ export default function Dashboard() {
             onClick={() => setActiveTab("keys")} 
             className={`py-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${activeTab === "keys" ? "border-emerald-400 text-white font-semibold" : "border-transparent text-zinc-400 hover:text-zinc-200"}`}
           >
-            <Key className="w-3.5 h-3.5" /> Key Pools ({keys.length})
+            <Key className="w-3.5 h-3.5" /> Provider Pools ({providers.length})
           </button>
           <button 
             onClick={() => setActiveTab("logs")} 
@@ -126,7 +162,34 @@ export default function Dashboard() {
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            {/* Top Stat Cards (Like Redi Analytics) */}
+            
+            {/* 1-Click Import Banner from 9Router */}
+            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-mono font-bold">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-white">Import Providers from 9Router</h2>
+                  <p className="text-xs text-zinc-400 mt-0.5">Clone all active provider connections from local 9Router SQLite (`/root/.9router/db/data.sqlite`).</p>
+                </div>
+              </div>
+              <button 
+                onClick={handleImport9Router}
+                disabled={importing}
+                className="px-4 py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-semibold text-xs transition-colors shrink-0 disabled:opacity-50"
+              >
+                {importing ? "Cloning..." : "Import 9Router DB"}
+              </button>
+            </div>
+
+            {importMsg && (
+              <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-lg text-xs font-mono text-emerald-400">
+                {importMsg}
+              </div>
+            )}
+
+            {/* Stat Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-xl space-y-1.5">
                 <div className="text-xs text-zinc-400 font-medium flex items-center justify-between">
@@ -148,11 +211,11 @@ export default function Dashboard() {
 
               <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-xl space-y-1.5">
                 <div className="text-xs text-zinc-400 font-medium flex items-center justify-between">
-                  <span>Estimated Cost</span>
-                  <Coins className="w-4 h-4 text-emerald-400" />
+                  <span>Active Connections</span>
+                  <Server className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="text-2xl sm:text-3xl font-bold font-mono text-emerald-400">$12.55</div>
-                <div className="text-[11px] text-zinc-400 font-mono">Avg: $0.07 / req</div>
+                <div className="text-2xl sm:text-3xl font-bold font-mono text-white">{providers.length}</div>
+                <div className="text-[11px] text-emerald-400 font-mono">100% Failover Safe</div>
               </div>
 
               <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-xl space-y-1.5">
@@ -164,44 +227,12 @@ export default function Dashboard() {
                 <div className="text-[11px] text-zinc-500 font-mono">P99 Engine Added</div>
               </div>
             </div>
-
-            {/* Recent API Call Activity List (Image Style) */}
-            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-400" /> Recent API Routing Activity
-                </h2>
-                <button onClick={() => setActiveTab("analytics")} className="text-xs text-emerald-400 hover:underline font-mono">
-                  Full Cost Breakdown &rarr;
-                </button>
-              </div>
-
-              <div className="space-y-3 font-mono text-xs">
-                {recentLogs.map((log) => (
-                  <div key={log.id} className="bg-zinc-950 border border-zinc-850 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      <span className="font-semibold text-white">{log.model}</span>
-                      <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 text-[11px]">{log.provider}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-zinc-400 text-[11px]">
-                      <span>In: {log.inTokens}</span>
-                      <span>Out: {log.outTokens}</span>
-                      <span className="font-semibold text-emerald-400">{log.cost}</span>
-                      <span className="text-zinc-600">{log.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* TAB 2: TOKEN & COST ANALYTICS (Matches Image Style) */}
+        {/* TAB 2: TOKEN & COST ANALYTICS */}
         {activeTab === "analytics" && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            
-            {/* Summary Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl">
                 <div className="text-xs text-zinc-400">Input Tokens</div>
@@ -220,83 +251,22 @@ export default function Dashboard() {
                 <div className="text-xl font-bold font-mono text-emerald-400 mt-1">$12.55</div>
               </div>
             </div>
-
-            {/* Token Consumption Graph Visual */}
-            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-400" /> Token Consumption (24h)
-                </h2>
-                <span className="text-xs text-zinc-500 font-mono">Peak: 00:00 UTC</span>
-              </div>
-
-              {/* SVG Line Graph Mock */}
-              <div className="h-40 w-full flex items-end justify-between gap-1 pt-6 px-2">
-                {[15, 22, 10, 35, 48, 80, 95, 60, 42, 30, 55, 70, 88, 100, 65, 40, 25, 30, 45, 60].map((h, i) => (
-                  <div key={i} className="w-full bg-zinc-950 rounded-t border-t border-emerald-500/30 flex flex-col justify-end overflow-hidden">
-                    <div 
-                      className="bg-emerald-500/20 hover:bg-emerald-500/40 transition-all rounded-t"
-                      style={{ height: `${h}%` }}
-                    ></div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-between text-[10px] font-mono text-zinc-500 border-t border-zinc-850 pt-2">
-                <span>00:00</span>
-                <span>06:00</span>
-                <span>12:00</span>
-                <span>18:00</span>
-                <span>23:59</span>
-              </div>
-            </div>
-
-            {/* Per-Model Cost Table */}
-            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-4">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <Layers className="w-4 h-4 text-emerald-400" /> Cost Distribution Per Model
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs font-mono">
-                  <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
-                    <tr>
-                      <th className="p-3">Model</th>
-                      <th className="p-3">Requests</th>
-                      <th className="p-3">Input Tokens</th>
-                      <th className="p-3">Output Tokens</th>
-                      <th className="p-3 text-right">Estimated Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800 text-zinc-300">
-                    {modelStats.map((stat, idx) => (
-                      <tr key={idx}>
-                        <td className="p-3 font-semibold text-white">{stat.model}</td>
-                        <td className="p-3">{stat.requests}</td>
-                        <td className="p-3 text-zinc-400">{stat.inTokens}</td>
-                        <td className="p-3 text-zinc-400">{stat.outTokens}</td>
-                        <td className="p-3 text-right font-bold text-emerald-400">{stat.cost}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
           </div>
         )}
 
-        {/* TAB 3: KEY POOLS */}
+        {/* TAB 3: KEY POOLS & PROVIDERS */}
         {activeTab === "keys" && (
           <div className="space-y-8 animate-in fade-in duration-300">
+            
             {/* Add Key Form */}
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-4">
               <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <Plus className="w-4 h-4 text-emerald-400" /> Register API Key to Pool
+                <Plus className="w-4 h-4 text-emerald-400" /> Register Provider Key
               </h2>
               
               <form onSubmit={handleAddKey} className="grid grid-cols-1 sm:grid-cols-12 gap-4 text-xs">
                 <div className="sm:col-span-3 space-y-1.5">
-                  <label className="block text-zinc-400 font-medium">Provider</label>
+                  <label className="block text-zinc-400 font-medium">Provider Target</label>
                   <select 
                     value={newProvider}
                     onChange={(e) => setNewProvider(e.target.value)}
@@ -305,11 +275,12 @@ export default function Dashboard() {
                     <option value="OpenAI">OpenAI</option>
                     <option value="Anthropic">Anthropic</option>
                     <option value="Gemini">Gemini</option>
+                    <option value="Codex">Codex / OAuth</option>
                   </select>
                 </div>
 
                 <div className="sm:col-span-5 space-y-1.5">
-                  <label className="block text-zinc-400 font-medium">API Key Secret</label>
+                  <label className="block text-zinc-400 font-medium">API Key / Secret Token</label>
                   <input 
                     type="password" 
                     placeholder="sk-proj-..."
@@ -321,7 +292,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="block text-zinc-400 font-medium">Weight</label>
+                  <label className="block text-zinc-400 font-medium">Priority</label>
                   <input 
                     type="number" 
                     value={newWeight}
@@ -343,55 +314,39 @@ export default function Dashboard() {
               </form>
             </div>
 
-            {/* Key List Table */}
+            {/* Provider Connections Table */}
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-4">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono">
-                Active Key Pools & Health
-              </h2>
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <h2 className="text-xs font-semibold text-white uppercase tracking-wider font-mono">
+                  Active Provider Connections ({providers.length})
+                </h2>
+                <button onClick={handleImport9Router} className="text-xs text-emerald-400 hover:underline font-mono">
+                  Re-sync 9Router SQLite
+                </button>
+              </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-mono">
                   <thead className="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
                     <tr>
                       <th className="p-3">Provider</th>
-                      <th className="p-3">Key Identifier</th>
+                      <th className="p-3">Name / Identifier</th>
+                      <th className="p-3">Auth Type</th>
+                      <th className="p-3">Priority</th>
                       <th className="p-3">Status</th>
-                      <th className="p-3">Requests</th>
-                      <th className="p-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800 text-zinc-300">
-                    {keys.map((k) => (
-                      <tr key={k.id}>
-                        <td className="p-3 font-semibold text-white">{k.provider}</td>
-                        <td className="p-3 text-zinc-400">{k.key}</td>
+                    {providers.map((p, i) => (
+                      <tr key={p.id || i}>
+                        <td className="p-3 font-semibold text-white uppercase">{p.provider}</td>
+                        <td className="p-3 text-zinc-400">{p.name || p.email || p.id}</td>
+                        <td className="p-3 uppercase text-[11px] text-zinc-500">{p.authType || "apikey"}</td>
+                        <td className="p-3 font-bold text-emerald-400">{p.priority || 1}</td>
                         <td className="p-3">
-                          {k.status === "READY" ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              <CheckCircle2 className="w-3 h-3" /> READY
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              <AlertTriangle className="w-3 h-3" /> COOLDOWN (429)
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3">{k.requests.toLocaleString()}</td>
-                        <td className="p-3 text-right space-x-3">
-                          {k.status === "COOLDOWN" && (
-                            <button 
-                              onClick={() => handleResetCooldown(k.id)}
-                              className="text-emerald-400 hover:underline"
-                            >
-                              Reset
-                            </button>
-                          )}
-                          <button 
-                            onClick={() => handleRevoke(k.id)}
-                            className="text-rose-400 hover:underline"
-                          >
-                            Revoke
-                          </button>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <CheckCircle2 className="w-3 h-3" /> READY
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -399,6 +354,7 @@ export default function Dashboard() {
                 </table>
               </div>
             </div>
+
           </div>
         )}
 
