@@ -642,7 +642,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                 className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   isActive
                     ? "bg-zinc-800 text-white shadow-sm border border-zinc-700/60"
-                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                    : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60"
                 }`}
               >
                 <Icon
@@ -658,7 +658,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                     className={`ml-auto rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
                       isActive
                         ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/40"
-                        : "bg-zinc-800/90 text-emerald-400 border border-zinc-700/60"
+                        : "bg-zinc-800 text-zinc-300 border border-zinc-700/60"
                     }`}
                   >
                     {item.badge}
@@ -715,26 +715,30 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                       <div className="font-mono text-3xl font-semibold tracking-tight text-white">
                         {effectiveProviderCount}
                       </div>
-                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
+                      <div className="mt-1 text-xs font-medium text-emerald-100/80">
                         Active Provider Connections
                       </div>
                     </div>
-                    <div>
-                      <div className="font-mono text-3xl font-semibold tracking-tight text-white">
-                        {stats.activeStreams}
+                    {Boolean(stats.activeStreams && stats.activeStreams > 0) && (
+                      <div>
+                        <div className="font-mono text-3xl font-semibold tracking-tight text-white">
+                          {stats.activeStreams}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-emerald-100/80">
+                          Active SSE Streams
+                        </div>
                       </div>
-                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
-                        Active SSE Streams
+                    )}
+                    {Boolean(stats.totalRequests && stats.totalRequests > 5) && (
+                      <div>
+                        <div className="font-mono text-3xl font-semibold tracking-tight text-white">
+                          {stats.totalRequests}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-emerald-100/80">
+                          Total Requests Routed
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="font-mono text-3xl font-semibold tracking-tight text-white">
-                        {stats.totalRequests}
-                      </div>
-                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
-                        Total Requests Routed
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </article>
@@ -754,16 +758,12 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                   OpenAI and Anthropic compatible endpoint listening. Use in
                   Cursor, Cline, Hermes, or LangChain.
                 </p>
-                <div className="mt-6 flex flex-wrap gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 font-mono text-xs font-medium text-zinc-100 shadow-sm">
-                    <code className="rounded bg-emerald-950/70 px-1 py-0.5 font-mono text-[11px] font-bold text-emerald-400 border border-emerald-500/30">
-                      POST
-                    </code>{" "}
-                    /v1/chat/completions
+                <div className="mt-6 flex flex-wrap items-center gap-2">
+                  <span className="text-zinc-100 bg-zinc-900 border border-zinc-700 px-2 py-1 rounded text-xs font-mono inline-flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">POST</span> /v1/chat/completions
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/60 px-3 py-1.5 font-mono text-xs font-medium text-emerald-300 shadow-sm">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />{" "}
-                    SSE streaming ready
+                  <span className="text-zinc-100 bg-zinc-900 border border-zinc-700 px-2 py-1 rounded text-xs font-mono inline-flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> SSE streaming ready
                   </span>
                 </div>
               </article>
@@ -779,19 +779,19 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
               />
               <Metric
                 label="Total Requests"
-                value={stats.totalRequests}
-                detail="Across all sessions"
+                value={stats.totalRequests > 5 ? stats.totalRequests : "--"}
+                detail={stats.totalRequests > 5 ? "Across all sessions" : "No live traffic yet"}
                 icon={Activity}
               />
               <Metric
                 label="Success Rate"
                 value={
-                  stats.totalRequests > 0
+                  stats.totalRequests > 5
                     ? `${(
                         (stats.successRequests / stats.totalRequests) *
                         100
                       ).toFixed(1)}%`
-                    : "100%"
+                    : "--"
                 }
                 detail="Failover protected"
                 icon={Zap}
@@ -802,9 +802,11 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                 value={
                   stats.estimatedTokens > 1000
                     ? `${(stats.estimatedTokens / 1000).toFixed(1)}k`
-                    : stats.estimatedTokens
+                    : stats.estimatedTokens > 50
+                    ? stats.estimatedTokens
+                    : "--"
                 }
-                detail="Approximate routed tokens"
+                detail={stats.estimatedTokens > 50 ? "Approximate routed tokens" : "Awaiting requests"}
                 icon={Database}
               />
             </div>
