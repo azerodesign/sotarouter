@@ -555,7 +555,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
   };
 
   return (
-    <div className="grid-bg min-h-screen bg-[#09090b] text-zinc-100">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100">
       <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-[#09090b]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1360px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
