@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Search,
   Server,
+  ShieldCheck,
   Settings2,
   Terminal,
   Trash2,
@@ -30,7 +31,7 @@ import {
   Zap,
 } from "lucide-react";
 
-type Tab = "overview" | "providers" | "analytics" | "logs";
+type Tab = "overview" | "endpoint" | "providers" | "analytics" | "logs";
 type Provider = {
   id: string;
   provider: string;
@@ -119,8 +120,8 @@ function Metric({ label, value, detail, icon: Icon, tone = "neutral" }: { label:
   );
 }
 
-export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -255,6 +256,7 @@ export default function Dashboard() {
         <div className={`border-t border-zinc-800/70 lg:block ${mobileMenu ? "block" : "hidden"}`}>
           <nav className="mx-auto flex max-w-[1360px] gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8" aria-label="Dashboard sections">
             <TabButton active={activeTab === "overview"} onClick={() => { setActiveTab("overview"); setMobileMenu(false); }}><Activity className="h-3.5 w-3.5" /> Overview</TabButton>
+            <TabButton active={activeTab === "endpoint"} onClick={() => { setActiveTab("endpoint"); setMobileMenu(false); }}><Code2 className="h-3.5 w-3.5" /> Endpoint</TabButton>
             <TabButton active={activeTab === "providers"} onClick={() => { setActiveTab("providers"); setMobileMenu(false); }}><Server className="h-3.5 w-3.5" /> Providers <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">{providers.length}</span></TabButton>
             <TabButton active={activeTab === "analytics"} onClick={() => { setActiveTab("analytics"); setMobileMenu(false); }}><Coins className="h-3.5 w-3.5" /> Analytics</TabButton>
             <TabButton active={activeTab === "logs"} onClick={() => { setActiveTab("logs"); setMobileMenu(false); }}><Terminal className="h-3.5 w-3.5" /> Live logs</TabButton>
@@ -322,6 +324,21 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === "endpoint" && (
+          <div className="rise-in space-y-7">
+            <div><p className="eyebrow">Gateway endpoint</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Endpoint & key access.</h1><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">Configure the public routing surface and inspect masked client keys. Values shown here are local control-plane state until the gateway backend is connected.</p></div>
+            <section className="grid gap-4 lg:grid-cols-[1.25fr_.75fr]">
+              <article className="surface rounded-2xl p-6 sm:p-7">
+                <div className="flex items-start justify-between gap-4"><div><p className="eyebrow">Primary endpoint</p><h2 className="mt-2 font-mono text-xl text-white">https://gateway.example/v1</h2></div><span className="inline-flex items-center gap-1.5 rounded-md border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 font-mono text-[10px] uppercase text-amber-300"><Clock3 className="h-3.5 w-3.5" /> Not connected</span></div>
+                <div className="mt-6 flex items-center justify-between border-t border-zinc-800 pt-5"><div><h3 className="text-sm font-medium text-white">Gateway tunnel</h3><p className="mt-1 text-xs text-zinc-600">Expose the OpenAI-compatible endpoint through a managed tunnel.</p></div><span className="h-6 w-11 rounded-full border border-zinc-700 bg-zinc-900 p-1"><span className="block h-4 w-4 rounded-full bg-zinc-600" /></span></div>
+                <div className="mt-5 flex items-center justify-between border-t border-zinc-800 pt-5"><div><h3 className="text-sm font-medium text-white">Tailscale access</h3><p className="mt-1 text-xs text-zinc-600">Private network exposure is not connected yet.</p></div><span className="h-6 w-11 rounded-full border border-zinc-700 bg-zinc-900 p-1"><span className="block h-4 w-4 rounded-full bg-zinc-600" /></span></div>
+              </article>
+              <article className="surface rounded-2xl p-6 sm:p-7"><p className="eyebrow">Authentication</p><div className="mt-3 flex items-center justify-between"><div><h2 className="text-lg font-semibold text-white">Enforced</h2><p className="mt-1 text-xs text-zinc-600">API key auth will be required when the gateway is connected.</p></div><ShieldCheck className="h-5 w-5 text-emerald-400" /></div><div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950 p-4"><div className="flex items-center justify-between"><span className="font-mono text-[10px] uppercase tracking-wide text-zinc-600">Client keys</span><span className="font-mono text-[10px] text-zinc-600">0 active</span></div><p className="mt-4 text-sm text-zinc-500">No API keys configured. Durable key storage arrives with gateway auth.</p></div></article>
+            </section>
+            <section className="surface rounded-2xl p-6 sm:p-7"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-950 text-zinc-400"><Terminal className="h-4 w-4" /></span><div><p className="eyebrow">Request base</p><h2 className="mt-1 text-base font-semibold text-white">Use this path after the data plane is connected.</h2></div></div><div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"><code className="truncate font-mono text-xs text-emerald-300">/v1/chat/completions</code><span className="font-mono text-[10px] text-zinc-600">SSE pending</span></div></section>
+          </div>
+        )}
+
         {activeTab === "providers" && (
           <div className="rise-in space-y-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -362,3 +379,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+export default Dashboard;
