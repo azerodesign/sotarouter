@@ -88,6 +88,8 @@ export default function GenericProviderPage() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [copiedModel, setCopiedModel] = useState<string | null>(null);
+  const [isTestingAll, setIsTestingAll] = useState(false);
+  const [testAllProgress, setTestAllProgress] = useState("");
 
   // Add Account Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -337,6 +339,21 @@ export default function GenericProviderPage() {
     }
   };
 
+  const runTestAll = async () => {
+    if (models.length === 0 || isTestingAll) return;
+    setIsTestingAll(true);
+    for (let i = 0; i < models.length; i++) {
+      const m = models[i];
+      setTestAllProgress(`Testing ${i + 1}/${models.length}...`);
+      await runTest(m.id);
+      if (i < models.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+    }
+    setIsTestingAll(false);
+    setTestAllProgress("");
+  };
+
   const displayName = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
@@ -509,17 +526,31 @@ export default function GenericProviderPage() {
                 Direct endpoint routing with model identifier prefix.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {testAllProgress && (
+                <span className="text-[10px] font-mono text-amber-400 whitespace-nowrap">
+                  {testAllProgress}
+                </span>
+              )}
               {lastSynced && (
-                <span className="text-[10px] font-mono text-zinc-500">
+                <span className="text-[10px] font-mono text-zinc-500 whitespace-nowrap">
                   Synced: {lastSynced}
                 </span>
               )}
               <button
                 type="button"
-                disabled={modelsLoading}
+                disabled={modelsLoading || isTestingAll || models.length === 0}
+                onClick={runTestAll}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-semibold font-mono transition disabled:opacity-50 whitespace-nowrap"
+              >
+                <Play className="h-3 w-3 fill-current" />
+                {isTestingAll ? "Testing..." : "Test All"}
+              </button>
+              <button
+                type="button"
+                disabled={modelsLoading || isTestingAll}
                 onClick={syncModels}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-mono text-zinc-300 hover:text-white transition disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-mono text-zinc-300 hover:text-white transition disabled:opacity-50 whitespace-nowrap"
               >
                 <RotateCw className={`h-3 w-3 ${modelsLoading ? "animate-spin" : ""}`} />
                 Sync Models
@@ -571,11 +602,12 @@ export default function GenericProviderPage() {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-zinc-900 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
+                    <div className="pt-2 border-t border-zinc-900 space-y-2">
+                      <div className="min-h-6 flex items-center min-w-0">
                         {res ? (
                           <div
-                            className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1 truncate ${
+                            title={res.msg}
+                            className={`max-w-full w-full text-[10px] font-mono px-2 py-1 rounded border inline-flex items-center gap-1.5 ${
                               res.status === "success"
                                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                 : "bg-rose-500/10 text-rose-400 border-rose-500/20"
@@ -586,7 +618,7 @@ export default function GenericProviderPage() {
                             ) : (
                               <AlertTriangle className="h-3 w-3 shrink-0" />
                             )}
-                            <span className="truncate">{res.msg}</span>
+                            <span className="min-w-0 truncate">{res.msg}</span>
                             {res.latency && <span className="opacity-60 shrink-0">({res.latency}ms)</span>}
                           </div>
                         ) : (
@@ -596,9 +628,9 @@ export default function GenericProviderPage() {
 
                       <button
                         type="button"
-                        disabled={isRunning}
+                        disabled={isRunning || isTestingAll}
                         onClick={() => runTest(m.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition shrink-0"
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition"
                       >
                         {isRunning ? (
                           <>

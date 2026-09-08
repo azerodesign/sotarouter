@@ -253,6 +253,43 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 		candidates = generalCandidates
 	}
 
+	// Short backoff wait if all matched providers are temporarily on cooldown
+	if len(candidates) == 0 {
+		var earliest time.Time
+		for _, prv := range p.providers {
+			if !prv.IsActive {
+				continue
+			}
+			pName := strings.ToLower(prv.Provider)
+			if isAGModel && pName != "antigravity" {
+				continue
+			}
+			if prv.CooldownUntil.After(now) {
+				if earliest.IsZero() || prv.CooldownUntil.Before(earliest) {
+					earliest = prv.CooldownUntil
+				}
+			}
+		}
+
+		waitDuration := time.Until(earliest)
+		if !earliest.IsZero() && waitDuration > 0 && waitDuration <= 3*time.Second {
+			p.mu.Unlock()
+			time.Sleep(waitDuration + 50*time.Millisecond)
+			p.mu.Lock()
+
+			now = time.Now()
+			for _, prv := range p.providers {
+				if prv.IsActive && !prv.CooldownUntil.After(now) {
+					pName := strings.ToLower(prv.Provider)
+					if isAGModel && pName != "antigravity" {
+						continue
+					}
+					candidates = append(candidates, prv)
+				}
+			}
+		}
+	}
+
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no healthy provider available for model: %s", model)
 	}

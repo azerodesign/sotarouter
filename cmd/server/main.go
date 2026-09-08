@@ -505,8 +505,17 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			respBytes, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			errMsg := fmt.Sprintf("upstream error %d: %s", resp.StatusCode, string(respBytes))
-			g.pool.MarkCooldown(prv.ID, 300*time.Second, errMsg)
+
+			cooldownTime := 20 * time.Second
+			if resp.StatusCode == 429 {
+				cooldownTime = 15 * time.Second
+			} else if resp.StatusCode == 401 || resp.StatusCode == 403 {
+				cooldownTime = 90 * time.Second
+			}
+
+			g.pool.MarkCooldown(prv.ID, cooldownTime, errMsg)
 			lastErr = fmt.Errorf("provider %s failed: %d (%s)", prv.Provider, resp.StatusCode, string(respBytes))
+			time.Sleep(250 * time.Millisecond)
 			continue
 		}
 
