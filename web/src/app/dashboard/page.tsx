@@ -286,8 +286,8 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
           </div>
         </div>
 
-        <div className={`border-t border-zinc-800/70 lg:block ${mobileMenu ? "block" : "hidden"}`}>
-          <nav className="mx-auto flex max-w-[1360px] gap-6 overflow-x-auto px-4 sm:px-6 lg:px-8" aria-label="Dashboard sections">
+        <div className={`border-t border-zinc-800/70 lg:hidden ${mobileMenu ? "block" : "hidden"}`}>
+          <nav className="mx-auto flex max-w-[1360px] gap-6 overflow-x-auto px-4 sm:px-6" aria-label="Dashboard sections">
             <TabButton active={activeTab === "overview"} onClick={() => { setActiveTab("overview"); setMobileMenu(false); }}><Activity className="h-3.5 w-3.5" /> Overview</TabButton>
             <TabButton active={activeTab === "endpoint"} onClick={() => { setActiveTab("endpoint"); setMobileMenu(false); }}><Code2 className="h-3.5 w-3.5" /> Endpoint</TabButton>
             <TabButton active={activeTab === "providers"} onClick={() => { setActiveTab("providers"); setMobileMenu(false); }}><Server className="h-3.5 w-3.5" /> Providers <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">{providers.length}</span></TabButton>
@@ -297,7 +297,9 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
         </div>
       </header>
 
-      <main id="main-content" className="mx-auto max-w-[1360px] px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
+      <aside className="fixed inset-y-16 left-0 z-30 hidden w-64 border-r border-zinc-800/80 bg-[#09090b] px-4 py-6 lg:block"><p className="px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-600">Control plane</p><nav className="mt-4 space-y-1" aria-label="Primary navigation"><Link href="/dashboard" className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm ${activeTab === "overview" ? "bg-zinc-800 text-white" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"}`}><Activity className="h-4 w-4" /> Overview</Link><Link href="/dashboard/endpoint" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Code2 className="h-4 w-4" /> Endpoint</Link><Link href="/dashboard/providers" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Server className="h-4 w-4" /> Providers <span className="ml-auto rounded bg-zinc-800 px-1.5 py-0.5 text-[10px]">{providers.length}</span></Link><Link href="/dashboard/token-saver" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Zap className="h-4 w-4" /> Token Saver</Link><Link href="/dashboard/cli-tools" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Terminal className="h-4 w-4" /> CLI Tools</Link><button type="button" onClick={() => setActiveTab("analytics")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Coins className="h-4 w-4" /> Analytics</button><button type="button" onClick={() => setActiveTab("logs")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white"><Terminal className="h-4 w-4" /> Live logs</button></nav></aside>
++
++      <main id="main-content" className="mx-auto max-w-[1360px] px-4 py-7 sm:px-6 lg:ml-64 lg:px-8 lg:py-10">
         {activeTab === "overview" && (
           <div className="rise-in space-y-8">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
