@@ -37,9 +37,22 @@ export async function GET(req: Request) {
       );
     }
 
+    const aliases: Record<string, string[]> = {
+      openai: ["openai", "codex"],
+      codex: ["openai", "codex"],
+      anthropic: ["anthropic", "claude"],
+      claude: ["anthropic", "claude"],
+      google: ["google", "gemini", "antigravity"],
+      gemini: ["google", "gemini"],
+    };
+    const owners = provider ? (aliases[provider] || [provider]) : null;
     const data = payload.data
       .filter((model) => typeof model.id === "string" && model.id.trim())
-      .filter((model) => !provider || String(model.owned_by || "").toLowerCase() === provider)
+      .filter((model) => {
+        if (!owners) return true;
+        const owner = String(model.owned_by || "").toLowerCase();
+        return owners.includes(owner) || (provider === "antigravity" && model.id.startsWith("ag/"));
+      })
       .map((model) => ({
         id: model.id,
         object: model.object || "model",

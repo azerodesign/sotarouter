@@ -154,11 +154,20 @@ export default function GenericProviderPage() {
       if (!res.ok) throw new Error(data.error || `Model sync failed (${res.status})`);
 
       if (Array.isArray(data.data) && data.data.length > 0) {
+        const providerAliases: Record<string, string[]> = {
+          openai: ["openai", "codex"],
+          codex: ["openai", "codex"],
+          anthropic: ["anthropic", "claude"],
+          claude: ["anthropic", "claude"],
+          google: ["google", "gemini", "antigravity"],
+          gemini: ["google", "gemini"],
+        };
+        const owners = providerAliases[providerKey] || [providerKey];
         const normalized = data.data
           .filter((m: { id?: string; owned_by?: string }) => typeof m.id === "string" && m.id.trim())
           .filter((m: { id: string; owned_by?: string }) => {
-            if (providerKey === "antigravity") return m.id.startsWith("ag/");
-            return true;
+            if (providerKey === "antigravity") return m.id.startsWith("ag/") || String(m.owned_by || "").toLowerCase() === "antigravity";
+            return owners.includes(String(m.owned_by || "").toLowerCase());
           })
           .map((m: { id: string }) => ({
             id: m.id,
