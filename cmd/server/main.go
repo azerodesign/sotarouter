@@ -7,87 +7,277 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"sotarouter/pkg/provider"
 )
 
-type Config struct{ APIKey, Upstream, UpstreamKey string }
-
-func gatewayHandler(cfg Config) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"status":"ok","engine":"SotaRouter"}`)
-	})
-	mux.HandleFunc("/v1/chat/completions", proxyChat(cfg))
-	return mux
+type Gateway struct {
+	pool      *provider.Pool
+	authKey   string
+	client    *http.Client
 }
 
-func proxyChat(cfg Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+func NewGateway(pool *provider.Pool, authKey string) *Gateway {
+	return &Gateway{
+		pool:    pool,
+		authKey: authKey,
+		client: &http.Client{
+			Timeout: 180 * time.Second,
+		},
+	}
+}
+
+type ChatPayload struct {
+	Model  string `json:"model"`
+	Stream bool   `json:"stream"`
+}
+
+func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// CORS Headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, x-api-key")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.URL.Path {
+	case "/health":
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"status":"ok","engine":"SotaRouter","version":"1.0.0"}`)
+		return
+	case "/v1/models":
+		g.handleModels(w, r)
+		return
+	case "/v1/chat/completions":
+		g.handleChatCompletions(w, r)
+		return
+	case "/api/providers":
+		g.handleProvidersAPI(w, r)
+		return
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{
+		"object": "list",
+		"data": [
+			{"id": "gpt-4o", "object": "model", "owned_by": "sotarouter"},
+			{"id": "gpt-4o-mini", "object": "model", "owned_by": "sotarouter"},
+			{"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "sotarouter"},
+			{"id": "gemini-1.5-flash", "object": "model", "owned_by": "sotarouter"},
+			{"id": "gemini-1.5-pro", "object": "model", "owned_by": "sotarouter"}
+		]
+	}`))
+}
+
+func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":{"message":"method not allowed"}}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Gateway Auth (optional if SOTA_GATEWAY_KEY is set)
+	if g.authKey != "" {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" {
+			token = r.Header.Get("x-api-key")
+		}
+		if token != g.authKey {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":{"message":"invalid gateway token","type":"auth_error"}}`))
 			return
 		}
-		if cfg.APIKey != "" && r.Header.Get("Authorization") != "Bearer "+cfg.APIKey {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if cfg.Upstream == "" {
-			http.Error(w, "upstream not configured", http.StatusServiceUnavailable)
-			return
-		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+	}
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 16<<20))
+	if err != nil {
+		http.Error(w, `{"error":{"message":"unable to read request body"}}`, http.StatusBadRequest)
+		return
+	}
+
+	var chatReq ChatPayload
+	if err := json.Unmarshal(bodyBytes, &chatReq); err != nil || chatReq.Model == "" {
+		chatReq.Model = "default"
+	}
+
+	// Retry loop with failover / pool cooldown
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		prv, err := g.pool.NextCandidate(chatReq.Model)
 		if err != nil {
-			http.Error(w, "invalid request", 400)
-			return
+			lastErr = err
+			break
 		}
-		var payload json.RawMessage
-		if json.Unmarshal(body, &payload) != nil {
-			http.Error(w, "invalid JSON", 400)
-			return
+
+		targetBase := prv.BaseURL
+		if targetBase == "" {
+			targetBase = "https://api.openai.com"
 		}
-		u, err := url.Parse(strings.TrimRight(cfg.Upstream, "/") + "/v1/chat/completions")
+		destURL := strings.TrimRight(targetBase, "/") + "/v1/chat/completions"
+
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, destURL, bytes.NewReader(bodyBytes))
 		if err != nil {
-			http.Error(w, "invalid upstream", 500)
-			return
+			g.pool.MarkCooldown(prv.ID, 30*time.Second, err.Error())
+			continue
 		}
-		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u.String(), bytes.NewReader(body))
-		if err != nil {
-			http.Error(w, "upstream request failed", 502)
-			return
-		}
+
 		req.Header.Set("Content-Type", "application/json")
-		if cfg.UpstreamKey != "" {
-			req.Header.Set("Authorization", "Bearer "+cfg.UpstreamKey)
+		if prv.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+prv.APIKey)
 		}
-		resp, err := (&http.Client{Timeout: 120 * time.Second}).Do(req)
+
+		resp, err := g.client.Do(req)
 		if err != nil {
-			http.Error(w, "upstream unavailable", 502)
-			return
+			g.pool.MarkCooldown(prv.ID, 30*time.Second, err.Error())
+			lastErr = err
+			continue
 		}
+
+		// Check for rate limit or server error to trigger failover
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			respBytes, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			errMsg := fmt.Sprintf("upstream error %d: %s", resp.StatusCode, string(respBytes))
+			g.pool.MarkCooldown(prv.ID, 60*time.Second, errMsg)
+			lastErr = fmt.Errorf("provider %s failed: %d", prv.Provider, resp.StatusCode)
+			continue
+		}
+
+		// Success! Pass through headers and stream body
 		defer resp.Body.Close()
+		g.pool.MarkSuccess(prv.ID)
+
 		for k, values := range resp.Header {
-			for _, value := range values {
-				w.Header().Add(k, value)
+			for _, val := range values {
+				w.Header().Add(k, val)
 			}
 		}
 		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
+
+		// Flusher for real-time SSE streaming pass-through
+		if flusher, ok := w.(http.Flusher); ok {
+			buf := make([]byte, 4096)
+			for {
+				n, err := resp.Body.Read(buf)
+				if n > 0 {
+					w.Write(buf[:n])
+					flusher.Flush()
+				}
+				if err != nil {
+					break
+				}
+			}
+		} else {
+			io.Copy(w, resp.Body)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadGateway)
+	errMsg := "all upstream providers failed or exhausted"
+	if lastErr != nil {
+		errMsg = lastErr.Error()
+	}
+	fmt.Fprintf(w, `{"error":{"message":%q,"type":"gateway_routing_error"}}`, errMsg)
+}
+
+func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == http.MethodGet {
+		list := g.pool.List()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"count":     len(list),
+			"providers": list,
+		})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"invalid json"}`, 400)
+			return
+		}
+
+		// Support 9router JSON import or single item upsert
+		if rawItems, ok := body["providerConnections"].([]interface{}); ok {
+			count := 0
+			for _, item := range rawItems {
+				if b, err := json.Marshal(item); err == nil {
+					var prv provider.Provider
+					if json.Unmarshal(b, &prv) == nil && prv.Provider != "" {
+						if prv.ID == "" {
+							prv.ID = fmt.Sprintf("prv_%d", time.Now().UnixNano())
+						}
+						prv.IsActive = true
+						g.pool.Upsert(&prv)
+						count++
+					}
+				}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"message": fmt.Sprintf("imported %d providers", count),
+			})
+			return
+		}
+
+		var prv provider.Provider
+		b, _ := json.Marshal(body)
+		if err := json.Unmarshal(b, &prv); err != nil || prv.Provider == "" {
+			http.Error(w, `{"error":"provider field required"}`, 400)
+			return
+		}
+		if prv.ID == "" {
+			prv.ID = fmt.Sprintf("prv_%d", time.Now().UnixNano())
+		}
+		prv.IsActive = true
+		g.pool.Upsert(&prv)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":  true,
+			"provider": prv,
+		})
+		return
 	}
 }
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "3300"
 	}
-	cfg := Config{APIKey: os.Getenv("SOTA_API_KEY"), Upstream: os.Getenv("SOTA_UPSTREAM_URL"), UpstreamKey: os.Getenv("SOTA_UPSTREAM_KEY")}
-	log.Printf("[SotaRouter] gateway listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, gatewayHandler(cfg)); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	dataFile := os.Getenv("SOTA_DATA_FILE")
+	if dataFile == "" {
+		home, _ := os.UserHomeDir()
+		dataFile = filepath.Join(home, ".sotarouter", "providers.json")
+	}
+	authKey := os.Getenv("SOTA_GATEWAY_KEY")
+
+	pool, err := provider.NewPool(dataFile)
+	if err != nil {
+		log.Fatalf("failed to init provider pool: %v", err)
+	}
+
+	gateway := NewGateway(pool, authKey)
+
+	log.Printf("[SotaRouter Engine] Live gateway listening on :%s", port)
+	log.Printf("[SotaRouter Engine] Provider storage: %s", dataFile)
+
+	if err := http.ListenAndServe(":"+port, gateway); err != nil {
+		log.Fatalf("server terminated: %v", err)
 	}
 }

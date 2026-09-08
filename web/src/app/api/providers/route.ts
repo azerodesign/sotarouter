@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
+import os from "os";
 
 type JsonRecord = Record<string, unknown>;
 type StoredProvider = {
@@ -94,9 +97,33 @@ function connectionFrom(value: unknown, index: number): StoredProvider {
   };
 }
 
-let memoryProviders: StoredProvider[] = [];
+const DATA_FILE = process.env.SOTA_DATA_FILE || path.join(os.homedir(), ".sotarouter", "providers.json");
+
+function loadProvidersFromDisk(): StoredProvider[] {
+  try {
+    if (!fs.existsSync(DATA_FILE)) return [];
+    const raw = fs.readFileSync(DATA_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("[SotaRouter Storage] Load failed:", err);
+    return [];
+  }
+}
+
+function saveProvidersToDisk(providers: StoredProvider[]) {
+  try {
+    const dir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(providers, null, 2), "utf-8");
+  } catch (err) {
+    console.error("[SotaRouter Storage] Save failed:", err);
+  }
+}
+
+let memoryProviders: StoredProvider[] = loadProvidersFromDisk();
 
 export async function GET() {
+  memoryProviders = loadProvidersFromDisk();
   return NextResponse.json({ success: true, count: memoryProviders.length, providers: publicProviders() });
 }
 
@@ -128,6 +155,7 @@ export async function POST(req: Request) {
         if (existingIdx >= 0) memoryProviders[existingIdx] = formatted;
         else memoryProviders.push(formatted);
       }
+      saveProvidersToDisk(memoryProviders);
 
       return NextResponse.json({
         success: true,
@@ -139,6 +167,7 @@ export async function POST(req: Request) {
 
     if (body.action === "clear_all") {
       memoryProviders = [];
+      saveProvidersToDisk(memoryProviders);
       return NextResponse.json({ success: true, message: "Cleared all providers", providers: [] });
     }
 
@@ -151,6 +180,7 @@ export async function POST(req: Request) {
       data: { apiKey: text(body.apiKey), baseUrl: text(body.baseUrl), apiType: text(body.apiType), model: text(body.model) },
     }, 0);
     memoryProviders.push(newProvider);
+    saveProvidersToDisk(memoryProviders);
     return NextResponse.json({ success: true, provider: publicProvider(newProvider), providers: publicProviders() });
   } catch (error: unknown) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 400 });
@@ -162,6 +192,7 @@ export async function DELETE(req: Request) {
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ success: false, error: "id is required" }, { status: 400 });
     memoryProviders = memoryProviders.filter((provider) => provider.id !== id);
+    saveProvidersToDisk(memoryProviders);
     return NextResponse.json({ success: true, providers: publicProviders() });
   } catch (error: unknown) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 400 });
