@@ -110,7 +110,7 @@ function StatusPill({ status, error }: { status?: string; error?: string | null 
 function ProviderCard({ provider, onInspect, onDelete }: { provider: Provider; onInspect: (provider: Provider) => void; onDelete: (id: string) => void }) {
   const providerSlug = provider.provider.toLowerCase().replace(/[^a-z0-9_-]/g, "");
   return (
-    <article className="surface group flex min-h-[210px] flex-col justify-between rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:border-zinc-600">
+    <article className="surface provider-card group flex min-h-[210px] flex-col justify-between rounded-2xl p-5">
       <div>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -335,7 +335,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100">
+    <div className="grid-bg min-h-screen bg-[#09090b] text-zinc-100">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-emerald-400 focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-zinc-950">Skip to content</a>
 
       <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-[#09090b]/90 backdrop-blur-xl">
@@ -345,7 +345,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
               <Menu className="h-5 w-5" />
             </button>
             <Link href="/" className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-emerald-400/30 bg-emerald-400/10 font-mono text-sm font-bold text-emerald-300">S</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-[10px] border border-emerald-400/30 bg-emerald-400/10 font-mono text-sm font-bold text-emerald-300 shadow-[0_0_16px_-4px_rgba(57,217,138,0.5)]">S</span>
               <span className="font-semibold tracking-tight text-white">SotaRouter</span>
             </Link>
             <span className="hidden h-4 w-px bg-zinc-800 sm:block" />
@@ -354,7 +354,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
           <div className="flex items-center gap-2">
             <span className="hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 font-mono text-[10px] text-emerald-300 sm:inline-flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Gateway online
+              <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400" /> Gateway online
             </span>
             <button type="button" onClick={() => setShowImport(true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-3.5 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-300 active:scale-[.98]">
               <Upload className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Import connections</span><span className="sm:hidden">Import</span>
@@ -436,7 +436,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
         {activeTab === "endpoint" && (
           <div className="rise-in space-y-7">
-            <div><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Gateway active</div><h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">Endpoint & key access.</h1><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">Unified OpenAI & Anthropic compatible interface. Auto-failover and smart pool are active on port :3300.</p></div>
+            <div><div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-400"><span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400" /> Gateway active</div><h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">Endpoint & key access.</h1><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">Unified OpenAI & Anthropic compatible interface. Auto-failover and smart pool are active on port :3300.</p></div>
             <section className="grid gap-4 lg:grid-cols-[1.25fr_.75fr]">
               <article className="surface rounded-2xl p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-4"><div><p className="eyebrow">Primary endpoint</p><h2 className="mt-2 font-mono text-xl text-white">http://127.0.0.1:3300/v1</h2></div><span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1.5 font-mono text-[10px] uppercase text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" /> Engine live</span></div>
