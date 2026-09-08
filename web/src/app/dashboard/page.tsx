@@ -332,17 +332,17 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
               <article className="surface rounded-2xl p-6">
                 <div className="flex items-center justify-between"><span className="eyebrow">Endpoint</span><Code2 className="h-4 w-4 text-zinc-600" /></div>
-                <div className="mt-5 flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-emerald-400" /><code className="font-mono text-lg text-white">localhost:8080</code></div>
-                <p className="mt-3 text-sm leading-6 text-zinc-500">OpenAI-compatible routing surface for chat, messages, and streaming requests.</p>
-                <div className="mt-6 flex flex-wrap gap-2"><span className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 font-mono text-[10px] text-zinc-400">/v1/chat/completions</span><span className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 font-mono text-[10px] text-zinc-400">SSE enabled</span></div>
+                <div className="mt-5 flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-amber-400" /><code className="font-mono text-lg text-white">Not connected</code></div>
+                <p className="mt-3 text-sm leading-6 text-zinc-500">The OpenAI-compatible data plane is not connected yet. Configure it from Endpoint.</p>
+                <div className="mt-6 flex flex-wrap gap-2"><span className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 font-mono text-[10px] text-zinc-500">/v1/chat/completions</span><span className="rounded-md border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5 font-mono text-[10px] text-amber-300">SSE pending</span></div>
               </article>
             </section>
 
             <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Key metrics">
-              <Metric label="Requests, 24h" value="142,890" detail="+12.4% from yesterday" icon={Zap} tone="good" />
-              <Metric label="Tokens routed" value="22.4M" detail="19.1M input · 76.9k output" icon={Database} />
-              <Metric label="Estimated spend" value="$12.55" detail="Across 173 requests" icon={Coins} tone="good" />
-              <Metric label="Memory footprint" value="21.4 MB" detail="42 goroutines active" icon={Layers3} />
+              <Metric label="Requests, 24h" value="n/a" detail="Gateway not connected" icon={Zap} />
+              <Metric label="Tokens routed" value="n/a" detail="Usage ledger not connected" icon={Database} />
+              <Metric label="Estimated spend" value="n/a" detail="Usage ledger not connected" icon={Coins} />
+              <Metric label="Memory footprint" value="n/a" detail="Data plane not connected" icon={Layers3} />
             </section>
 
             <section className="surface rounded-2xl" aria-labelledby="recent-activity-title">
@@ -350,9 +350,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                 <div><p className="eyebrow">Request stream</p><h2 id="recent-activity-title" className="mt-1 text-lg font-semibold text-white">Recent activity</h2></div>
                 <button type="button" onClick={() => setActiveTab("logs")} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300">Open live logs <ChevronRight className="h-3.5 w-3.5" /></button>
               </div>
-              <div className="divide-y divide-zinc-800/80">
-                {recentLogs.map((log) => <div key={log.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6"><div className="flex min-w-0 items-center gap-3"><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400" /><div className="min-w-0"><div className="truncate text-sm font-medium text-zinc-200">{log.model}</div><div className="mt-1 text-xs text-zinc-600">{log.provider} · {log.time}</div></div></div><div className="flex items-center gap-4 pl-5 font-mono text-[11px] text-zinc-500 sm:pl-0"><span>in {log.input}</span><span>out {log.output}</span><span className="text-emerald-400">{log.cost}</span><span className="hidden rounded border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-emerald-300 sm:inline">{log.status}</span></div></div>)}
-              </div>
+              <div className="px-5 py-10 text-center sm:px-6"><p className="text-sm text-zinc-500">No request activity yet.</p><p className="mt-1 text-xs text-zinc-700">Connect the data plane to populate live logs.</p></div>
             </section>
           </div>
         )}
