@@ -122,7 +122,7 @@ function Metric({ label, value, detail, icon: Icon, tone = "neutral" }: { label:
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
@@ -138,9 +138,13 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/providers", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data: { success?: boolean; providers?: Provider[] }) => {
-        if (!cancelled && data.success && data.providers) setProviders(data.providers);
+      .then(async (response) => {
+        const data = await response.json() as { success?: boolean; providers?: Provider[]; error?: string };
+        if (!response.ok || !data.success) throw new Error(data.error || "Provider sync failed");
+        if (!cancelled) setProviders(data.providers || []);
+      })
+      .catch(() => {
+        if (!cancelled) setImportStatus("Provider sync unavailable. Retry after the gateway is ready.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -321,7 +325,7 @@ export default function Dashboard() {
         {activeTab === "providers" && (
           <div className="rise-in space-y-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-              <div><p className="eyebrow">Provider connections</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Your routing pool.</h1><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">Import exported 9Router connections or add a provider manually. Credentials stay in the payload you provide.</p></div>
+              <div><p className="eyebrow">Provider connections</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Your routing pool.</h1><p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">Import exported 9Router connections or add a provider manually. Credentials are accepted for routing, then redacted from every public response.</p></div>
               <div className="flex flex-col gap-2 sm:flex-row"><button type="button" onClick={() => setShowImport(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-300 active:scale-[.98]"><FileJson className="h-4 w-4" /> Import JSON</button><button type="button" onClick={clearProviders} disabled={!providers.length} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-800 px-4 text-xs font-medium text-zinc-400 transition hover:border-rose-400/30 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="h-4 w-4" /> Clear pool</button></div>
             </div>
 
