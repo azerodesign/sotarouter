@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Zap, ShieldCheck, Cpu, Download, Copy, Check, Terminal, Server } from "lucide-react";
+import { ArrowRight, ShieldCheck, Database, Copy, Check, Terminal, Server } from "lucide-react";
 
 export default function Home() {
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
@@ -15,9 +15,9 @@ export default function Home() {
   };
 
   const installCommands = {
-    cli: "curl -fsSL https://sotarouter.vercel.app/install.sh | sh",
-    docker: "docker run -d -p 8080:8080 -v sotadata:/data ghcr.io/azerodesign/sotarouter:latest",
-    go: "go install github.com/azerodesign/sotarouter/cmd/sotarouter@latest"
+    cli: "git clone https://github.com/azerodesign/sotarouter.git",
+    docker: "cd sotarouter/web && npm install && npm run dev",
+    go: "cd sotarouter && go run ./cmd/server"
   };
 
   return (
@@ -47,8 +47,8 @@ export default function Home() {
         
         <div className="space-y-6 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono text-emerald-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Sub-millisecond Engine Written in Pure Go
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Open-source AI routing control plane
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-white leading-tight">
@@ -56,7 +56,7 @@ export default function Home() {
           </h1>
 
           <p className="text-base sm:text-lg text-zinc-400 leading-relaxed">
-            Unified API gateway with zero-buffering SSE passthrough, Thompson-sampled latency routing, and dynamic key pool failovers. Run locally or self-host anywhere.
+            A control plane for importing provider connections, reviewing health metadata, and preparing a self-hosted AI gateway. Start with the web console.
           </p>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
@@ -64,7 +64,7 @@ export default function Home() {
               Open Web Console
             </Link>
             <a href="#local-install" className="px-6 py-3.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-semibold text-center text-sm transition-all flex items-center justify-center gap-2">
-              <Download className="w-4 h-4 text-emerald-400" /> Install on Local VPS
+              <Terminal className="w-4 h-4 text-emerald-400" /> View local setup
             </a>
           </div>
         </div>
@@ -77,7 +77,7 @@ export default function Home() {
                 <Server className="w-4 h-4" /> Self-Hosted / Local Machine
               </div>
               <h2 className="text-2xl font-bold text-white mt-1">Run SotaRouter Locally</h2>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Single static 15MB binary. No Node modules, no heavy dependencies.</p>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Development setup for the current Next.js control plane. The Go data plane is still under construction.</p>
             </div>
 
             <div className="flex items-center gap-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-xs font-mono">
@@ -126,24 +126,24 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Feature Cards */}
+        {/* Current capabilities */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-2">
-            <Zap className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-semibold text-white">1.14 ms Added Latency</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">Goroutine-per-stream execution eliminates event loop blocks and GIL bottlenecks.</p>
-          </div>
-
-          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-semibold text-white">Auto-Cooldown Failover</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">Instant 60s cooldown isolation on 429 rate-limits or 5xx provider outages.</p>
+            <h3 className="text-base font-semibold text-white">Redacted by default</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">Imported credentials are accepted server-side and masked before provider data reaches the public UI.</p>
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-2">
-            <Cpu className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-semibold text-white">21 MB Memory Footprint</h3>
-            <p className="text-xs text-zinc-400 leading-relaxed">Compiled single binary with CGO-free embedded SQLite ledger.</p>
+            <Database className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-base font-semibold text-white">Manual provider import</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">Paste or upload exported connection JSON. SotaRouter never reads a 9Router database automatically.</p>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-xl space-y-2">
+            <Server className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-base font-semibold text-white">Control plane first</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">Review provider metadata and model locks now. Routing, durable storage, and auth follow as separate releases.</p>
           </div>
         </div>
 
@@ -151,7 +151,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-zinc-800/80 py-6 bg-zinc-950 text-center text-xs font-mono text-zinc-500">
-        SotaRouter v1.0 — Pure Go Core Engine + Next.js Control Plane
+        SotaRouter. Next.js control plane preview
       </footer>
 
     </div>

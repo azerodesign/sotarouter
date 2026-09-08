@@ -288,9 +288,9 @@ export default function Dashboard() {
                   </div>
                   <p className="mt-3 max-w-lg text-sm leading-6 text-emerald-50/60">Requests are routed through healthy pools with streaming enabled and automatic cooldown on provider errors.</p>
                   <div className="mt-8 flex flex-wrap items-end gap-x-10 gap-y-4">
-                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">1.14<span className="ml-1 text-sm text-emerald-200/60">ms</span></div><div className="mt-1 text-xs text-emerald-100/50">P99 gateway overhead</div></div>
-                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">17<span className="ml-1 text-sm text-emerald-200/60">/ 18</span></div><div className="mt-1 text-xs text-emerald-100/50">connections available</div></div>
-                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">42</div><div className="mt-1 text-xs text-emerald-100/50">active streams</div></div>
+                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">n/a</div><div className="mt-1 text-xs text-emerald-100/50">Gateway benchmark not connected</div></div>
+                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">{providers.length}</div><div className="mt-1 text-xs text-emerald-100/50">imported connections</div></div>
+                    <div><div className="font-mono text-3xl font-semibold tracking-tight text-white">n/a</div><div className="mt-1 text-xs text-emerald-100/50">active streams not connected</div></div>
                   </div>
                 </div>
               </article>
