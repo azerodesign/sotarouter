@@ -21,7 +21,6 @@ import {
   Layers,
   MoreHorizontal,
   Plus,
-  RefreshCw,
   Search,
   Server,
   Shield,
@@ -368,6 +367,10 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
   });
   const [logs, setLogs] = useState<LogItem[]>([]);
 
+  // Real effective provider count synchronized across states
+  const effectiveProviderCount =
+    providers.length > 0 ? providers.length : stats.providerCount || 0;
+
   // Token Saver values
   const [tokenSaverValues, setTokenSaverValues] = useState<Record<string, string>>({
     rtk: "Balanced",
@@ -597,7 +600,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
               Endpoint
             </TabButton>
             <TabButton active={activeTab === "providers"} onClick={() => switchTab("providers")}>
-              Providers ({providers.length})
+              Providers ({effectiveProviderCount})
             </TabButton>
             <TabButton active={activeTab === "analytics"} onClick={() => switchTab("analytics")}>
               Analytics
@@ -611,90 +614,59 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
       {/* Persistent Desktop Sidebar */}
       <aside className="fixed inset-y-16 left-0 z-30 hidden w-64 border-r border-zinc-800/80 bg-[#09090b] px-4 py-6 lg:block">
-        <p className="px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+        <p className="px-3 font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-500">
           Control plane
         </p>
         <nav className="mt-4 space-y-1" aria-label="Primary navigation">
-          <button
-            type="button"
-            onClick={() => switchTab("overview")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "overview"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Activity className="h-4 w-4" /> Overview
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("endpoint")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "endpoint"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Code2 className="h-4 w-4" /> Endpoint
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("providers")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "providers"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Server className="h-4 w-4" /> Providers{" "}
-            <span className="ml-auto rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-300">
-              {providers.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("token-saver")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "token-saver"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Zap className="h-4 w-4" /> Token Saver
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("cli-tools")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "cli-tools"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Terminal className="h-4 w-4" /> CLI Tools
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("analytics")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "analytics"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Coins className="h-4 w-4" /> Analytics
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("logs")}
-            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${
-              activeTab === "logs"
-                ? "bg-zinc-800 text-white font-medium"
-                : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
-            }`}
-          >
-            <Terminal className="h-4 w-4" /> Live logs
-          </button>
+          {[
+            { id: "overview", label: "Overview", icon: Activity },
+            { id: "endpoint", label: "Endpoint", icon: Code2 },
+            {
+              id: "providers",
+              label: "Providers",
+              icon: Server,
+              badge: effectiveProviderCount,
+            },
+            { id: "token-saver", label: "Token Saver", icon: Zap },
+            { id: "cli-tools", label: "CLI Tools", icon: Terminal },
+            { id: "analytics", label: "Analytics", icon: Coins },
+            { id: "logs", label: "Live logs", icon: Terminal },
+          ].map((item) => {
+            const isActive = activeTab === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => switchTab(item.id as Tab)}
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-zinc-800 text-white shadow-sm border border-zinc-700/60"
+                    : "text-zinc-300 hover:bg-zinc-800/60 hover:text-white"
+                }`}
+              >
+                <Icon
+                  className={`h-4 w-4 transition-colors ${
+                    isActive
+                      ? "text-emerald-400"
+                      : "text-zinc-400 group-hover:text-zinc-200"
+                  }`}
+                />
+                <span>{item.label}</span>
+                {item.badge !== undefined && (
+                  <span
+                    className={`ml-auto rounded-md px-2 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                      isActive
+                        ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/40"
+                        : "bg-zinc-800/90 text-emerald-400 border border-zinc-700/60"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
       </aside>
 
@@ -709,13 +681,14 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                 <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
                   Router is operational.
                 </h1>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
+                <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
                   Unified AI gateway proxying OpenAI & Anthropic payloads with
                   automatic failover and non-buffering token streaming.
                 </p>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-600">
-                <RefreshCw className="h-3.5 w-3.5" /> Engine live on :3300
+              <div className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] text-emerald-400">
+                <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span>Engine Live (:3300)</span>
               </div>
             </div>
 
@@ -733,16 +706,16 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                       <CheckCircle2 className="h-3.5 w-3.5" /> Healthy
                     </span>
                   </div>
-                  <p className="mt-3 max-w-lg text-sm leading-6 text-emerald-50/70">
+                  <p className="mt-3 max-w-lg text-sm leading-6 text-emerald-50/80">
                     High-throughput goroutine proxy running in background.
                     Cooldown on 429/5xx triggers auto-failover to standby providers.
                   </p>
                   <div className="mt-8 flex flex-wrap items-end gap-x-10 gap-y-4">
                     <div>
                       <div className="font-mono text-3xl font-semibold tracking-tight text-white">
-                        {providers.length}
+                        {effectiveProviderCount}
                       </div>
-                      <div className="mt-1 text-xs text-emerald-100/60">
+                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
                         Active Provider Connections
                       </div>
                     </div>
@@ -750,7 +723,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                       <div className="font-mono text-3xl font-semibold tracking-tight text-white">
                         {stats.activeStreams}
                       </div>
-                      <div className="mt-1 text-xs text-emerald-100/60">
+                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
                         Active SSE Streams
                       </div>
                     </div>
@@ -758,7 +731,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                       <div className="font-mono text-3xl font-semibold tracking-tight text-white">
                         {stats.totalRequests}
                       </div>
-                      <div className="mt-1 text-xs text-emerald-100/60">
+                      <div className="mt-1 text-xs font-medium text-emerald-100/70">
                         Total Requests Routed
                       </div>
                     </div>
@@ -768,24 +741,28 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
               <article className="surface rounded-2xl p-6">
                 <div className="flex items-center justify-between">
-                  <span className="eyebrow">Endpoint</span>
-                  <Code2 className="h-4 w-4 text-zinc-600" />
+                  <span className="eyebrow text-zinc-400">Endpoint</span>
+                  <Code2 className="h-4 w-4 text-zinc-400" />
                 </div>
-                <div className="mt-5 flex items-center gap-3">
-                  <span className="live-dot h-2 w-2 rounded-full bg-emerald-400" />
+                <div className="mt-4 flex items-center gap-3">
+                  <span className="live-dot h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
                   <code className="font-mono text-base font-semibold text-white">
                     Active (port :3300)
                   </code>
                 </div>
-                <p className="mt-3 text-sm leading-6 text-zinc-500">
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
                   OpenAI and Anthropic compatible endpoint listening. Use in
                   Cursor, Cline, Hermes, or LangChain.
                 </p>
-                <div className="mt-6 flex flex-wrap gap-2">
-                  <span className="rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 font-mono text-[10px] text-emerald-400">
+                <div className="mt-6 flex flex-wrap gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 font-mono text-xs font-medium text-zinc-100 shadow-sm">
+                    <code className="rounded bg-emerald-950/70 px-1 py-0.5 font-mono text-[11px] font-bold text-emerald-400 border border-emerald-500/30">
+                      POST
+                    </code>{" "}
                     /v1/chat/completions
                   </span>
-                  <span className="rounded-md border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1.5 font-mono text-[10px] text-emerald-300">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-950/60 px-3 py-1.5 font-mono text-xs font-medium text-emerald-300 shadow-sm">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />{" "}
                     SSE streaming ready
                   </span>
                 </div>
@@ -795,7 +772,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <Metric
                 label="Providers"
-                value={providers.length}
+                value={effectiveProviderCount}
                 detail="Ready in pool"
                 icon={Server}
                 tone="good"
@@ -1000,14 +977,18 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
             {/* Provider Grid */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between text-xs text-zinc-500">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span>
-                  Showing <strong>{filteredProviders.length}</strong> of{" "}
-                  <strong>{providers.length}</strong> total providers
+                  Showing <strong className="text-zinc-200">{filteredProviders.length}</strong> of{" "}
+                  <strong className="text-emerald-400">{effectiveProviderCount}</strong> total providers
                 </span>
-                {loading && (
-                  <span className="flex items-center gap-1.5 text-zinc-400">
-                    <RefreshCw className="h-3 w-3 animate-spin" /> Syncing...
+                {loading && providers.length === 0 ? (
+                  <span className="flex items-center gap-1.5 text-zinc-400 font-mono text-[11px]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" /> Loading pool...
+                  </span>
+                ) : (
+                  <span className="font-mono text-[11px] text-zinc-500">
+                    Pool synced
                   </span>
                 )}
               </div>
