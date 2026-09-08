@@ -108,7 +108,67 @@ function StatusPill({ status, error }: { status?: string; error?: string | null 
 }
 
 function ProviderCard({ provider, onInspect, onDelete }: { provider: Provider; onInspect: (provider: Provider) => void; onDelete: (id: string) => void }) {
-  return <article className="surface group flex min-h-[210px] flex-col justify-between rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:border-zinc-600"><div><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 font-mono text-xs font-semibold uppercase text-zinc-200">{provider.provider.slice(0, 2)}</div><div className="min-w-0"><h2 className="truncate text-sm font-semibold uppercase tracking-tight text-white">{provider.provider}</h2><p className="mt-1 truncate text-xs text-zinc-500">{provider.name || provider.email || provider.id}</p></div></div><StatusPill status={provider.testStatus} error={provider.lastError} /></div>{provider.lastError && <p className="mt-4 truncate rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 font-mono text-[10px] text-amber-300">{provider.lastError}</p>}<div className="mt-5 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-4 font-mono text-[11px]"><div><span className="block text-zinc-600">Auth</span><strong className="mt-1 block uppercase text-zinc-300">{provider.authType || "apikey"}</strong></div><div><span className="block text-zinc-600">Priority</span><strong className="mt-1 block text-emerald-400">{provider.priority || 1}</strong></div></div><div className="mt-3 flex flex-wrap gap-2 font-mono text-[10px]"><span className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-500">{provider.modelLocks?.length ?? 0} model locks</span>{(provider.backoffLevel ?? 0) > 0 && <span className="rounded border border-amber-400/20 bg-amber-400/5 px-2 py-1 text-amber-300">backoff {provider.backoffLevel}</span>}</div></div><div className="mt-5 flex items-center justify-between border-t border-zinc-800 pt-3"><button type="button" onClick={() => onInspect(provider)} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300">Inspect payload <ArrowUpRight className="h-3.5 w-3.5" /></button><button type="button" onClick={() => onDelete(provider.id)} className="rounded-md p-1.5 text-zinc-600 transition hover:bg-rose-400/10 hover:text-rose-300" aria-label={`Delete ${provider.provider} connection`}><Trash2 className="h-4 w-4" /></button></div></article>;
+  const providerSlug = provider.provider.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return (
+    <article className="surface group flex min-h-[210px] flex-col justify-between rounded-2xl p-5 transition duration-200 hover:-translate-y-0.5 hover:border-zinc-600">
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden p-1.5 font-mono text-xs font-semibold uppercase text-zinc-200">
+              <img
+                src={`/providers/${providerSlug}.png`}
+                alt={provider.provider}
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                  (e.target as HTMLElement).parentElement!.innerText = provider.provider.slice(0, 2).toUpperCase();
+                }}
+              />
+            </div>
+            <div className="min-w-0">
+              <Link href={`/dashboard/providers/${encodeURIComponent(provider.provider.toLowerCase())}`} className="truncate text-sm font-semibold uppercase tracking-tight text-white hover:text-emerald-400 flex items-center gap-1.5">
+                {provider.provider} <ArrowUpRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </Link>
+              <p className="mt-1 truncate text-xs text-zinc-500">{provider.name || provider.email || provider.id}</p>
+            </div>
+          </div>
+          <StatusPill status={provider.testStatus} error={provider.lastError} />
+        </div>
+        {provider.lastError && (
+          <p className="mt-4 truncate rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 font-mono text-[10px] text-amber-300">
+            {provider.lastError}
+          </p>
+        )}
+        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-4 font-mono text-[11px]">
+          <div>
+            <span className="block text-zinc-600">Auth</span>
+            <strong className="mt-1 block uppercase text-zinc-300">{provider.authType || "apikey"}</strong>
+          </div>
+          <div>
+            <span className="block text-zinc-600">Priority</span>
+            <strong className="mt-1 block text-emerald-400">{provider.priority || 1}</strong>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 font-mono text-[10px]">
+          <span className="rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-500">{provider.modelLocks?.length ?? 0} model locks</span>
+          {(provider.backoffLevel ?? 0) > 0 && <span className="rounded border border-amber-400/20 bg-amber-400/5 px-2 py-1 text-amber-300">backoff {provider.backoffLevel}</span>}
+        </div>
+      </div>
+      <div className="mt-5 flex items-center justify-between border-t border-zinc-800 pt-3">
+        <Link href={`/dashboard/providers/${encodeURIComponent(provider.provider.toLowerCase())}`} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 hover:text-emerald-300">
+          Open Panel →
+        </Link>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => onInspect(provider)} className="text-xs font-medium text-zinc-500 hover:text-zinc-300">
+            Inspect
+          </button>
+          <button type="button" onClick={() => onDelete(provider.id)} className="rounded p-1 text-zinc-600 hover:bg-rose-500/10 hover:text-rose-400" aria-label="Delete provider">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function Metric({ label, value, detail, icon: Icon, tone = "neutral" }: { label: string; value: string; detail: string; icon: typeof Activity; tone?: "neutral" | "good" }) {
