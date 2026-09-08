@@ -213,8 +213,19 @@ func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Support 9router JSON import or single item upsert
-		if rawItems, ok := body["providerConnections"].([]interface{}); ok {
+		// 1. Support full 9Router backup export or providerConnections array
+		var rawItems []interface{}
+		if items, ok := body["providerConnections"].([]interface{}); ok {
+			rawItems = items
+		} else if items, ok := body["providers"].([]interface{}); ok {
+			rawItems = items
+		} else if items, ok := body["connections"].([]interface{}); ok {
+			rawItems = items
+		} else if prov, ok := body["provider"].(string); ok && prov != "" {
+			rawItems = []interface{}{body}
+		}
+
+		if len(rawItems) > 0 {
 			count := 0
 			for _, item := range rawItems {
 				itemMap, ok := item.(map[string]interface{})
@@ -261,7 +272,7 @@ func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
 			}
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": true,
-				"message": fmt.Sprintf("imported %d providers", count),
+				"message": fmt.Sprintf("imported %d providers from 9Router backup/export", count),
 			})
 			return
 		}
