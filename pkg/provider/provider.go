@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -84,6 +85,25 @@ func (p *Pool) load() error {
 		if item.APIKey == "" && item.Data != nil {
 			if k, ok := item.Data["apiKey"].(string); ok {
 				item.APIKey = k
+			} else if k, ok := item.Data["accessToken"].(string); ok {
+				item.APIKey = k
+			}
+		}
+		// Extract modelLocks from nested data if empty
+		if len(item.ModelLocks) == 0 && item.Data != nil {
+			var sub map[string]interface{}
+			if s, ok := item.Data["data"].(map[string]interface{}); ok {
+				sub = s
+			} else {
+				sub = item.Data
+			}
+			for k, v := range sub {
+				if strings.HasPrefix(k, "modelLock_") {
+					if b, ok := v.(bool); ok && b {
+						modelName := strings.TrimPrefix(k, "modelLock_")
+						item.ModelLocks = append(item.ModelLocks, modelName)
+					}
+				}
 			}
 		}
 	}
@@ -167,7 +187,8 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 	defer p.mu.Unlock()
 
 	now := time.Now()
-	var candidates []*Provider
+	var exactMatches []*Provider
+	var generalCandidates []*Provider
 
 	for _, prv := range p.providers {
 		if !prv.IsActive {
@@ -176,7 +197,10 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 		if prv.CooldownUntil.After(now) {
 			continue
 		}
-		// If modelLocks exist, check if model is allowed
+
+		pName := strings.ToLower(prv.Provider)
+
+		// Check if modelLocks exist
 		if len(prv.ModelLocks) > 0 {
 			matched := false
 			for _, lock := range prv.ModelLocks {
@@ -185,11 +209,26 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 					break
 				}
 			}
-			if !matched {
+			if matched {
+				exactMatches = append(exactMatches, prv)
+			}
+			continue
+		}
+
+		// Hint matching based on model family
+		if strings.HasPrefix(model, "gemini-") || strings.HasPrefix(model, "claude-") || strings.HasPrefix(model, "gpt-oss-") {
+			if pName == "antigravity" {
+				exactMatches = append(exactMatches, prv)
 				continue
 			}
 		}
-		candidates = append(candidates, prv)
+
+		generalCandidates = append(generalCandidates, prv)
+	}
+
+	candidates := exactMatches
+	if len(candidates) == 0 {
+		candidates = generalCandidates
 	}
 
 	if len(candidates) == 0 {

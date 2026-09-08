@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,26 @@ import (
 
 	"sotarouter/pkg/provider"
 )
+
+func getGoogleCredentials() (string, string) {
+	cid := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
+	csec := os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+	if cid != "" && csec != "" {
+		return cid, csec
+	}
+	home, _ := os.UserHomeDir()
+	oauthPath := filepath.Join(home, ".sotarouter", "google-oauth.json")
+	if data, err := os.ReadFile(oauthPath); err == nil {
+		var cfg struct {
+			ClientID     string `json:"clientId"`
+			ClientSecret string `json:"clientSecret"`
+		}
+		if json.Unmarshal(data, &cfg) == nil && cfg.ClientID != "" {
+			return cfg.ClientID, cfg.ClientSecret
+		}
+	}
+	return "", ""
+}
 
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`
@@ -94,6 +115,53 @@ type ChatPayload struct {
 	Messages []interface{} `json:"messages,omitempty"`
 }
 
+func (g *Gateway) getAntigravityToken(prv *provider.Provider) (string, string, error) {
+	var subdata map[string]interface{}
+	if prv.Data != nil {
+		if s, ok := prv.Data["data"].(map[string]interface{}); ok {
+			subdata = s
+		} else {
+			subdata = prv.Data
+		}
+	}
+	if subdata == nil {
+		return prv.APIKey, "", nil
+	}
+
+	projectId, _ := subdata["projectId"].(string)
+	refToken, _ := subdata["refreshToken"].(string)
+	currentAccess, _ := subdata["accessToken"].(string)
+
+	if refToken != "" {
+		cid, csec := getGoogleCredentials()
+		// Proactively refresh OAuth token from Google
+		data := url.Values{}
+		data.Set("grant_type", "refresh_token")
+		data.Set("client_id", cid)
+		data.Set("client_secret", csec)
+		data.Set("refresh_token", refToken)
+
+		resp, err := http.PostForm("https://oauth2.googleapis.com/token", data)
+		if err == nil && resp.StatusCode == 200 {
+			defer resp.Body.Close()
+			var tokenResp struct {
+				AccessToken string `json:"access_token"`
+			}
+			if json.NewDecoder(resp.Body).Decode(&tokenResp) == nil && tokenResp.AccessToken != "" {
+				prv.APIKey = tokenResp.AccessToken
+				subdata["accessToken"] = tokenResp.AccessToken
+				g.pool.Upsert(prv)
+				return tokenResp.AccessToken, projectId, nil
+			}
+		}
+	}
+
+	if currentAccess != "" {
+		return currentAccess, projectId, nil
+	}
+	return prv.APIKey, projectId, nil
+}
+
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Global CORS Headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -166,6 +234,12 @@ func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
     {"id": "claude-3-7-sonnet", "object": "model", "owned_by": "sotarouter"},
     {"id": "claude-3-5-sonnet", "object": "model", "owned_by": "sotarouter"},
     {"id": "claude-3-5-haiku", "object": "model", "owned_by": "sotarouter"},
+    {"id": "claude-sonnet-4-6", "object": "model", "owned_by": "sotarouter"},
+    {"id": "claude-opus-4-6-thinking", "object": "model", "owned_by": "sotarouter"},
+    {"id": "gemini-3.8-flash-high", "object": "model", "owned_by": "sotarouter"},
+    {"id": "gemini-3.7-flash-high", "object": "model", "owned_by": "sotarouter"},
+    {"id": "gemini-3.6-flash-high", "object": "model", "owned_by": "sotarouter"},
+    {"id": "gpt-oss-120b-medium", "object": "model", "owned_by": "sotarouter"},
     {"id": "deepseek-chat", "object": "model", "owned_by": "sotarouter"},
     {"id": "deepseek-reasoner", "object": "model", "owned_by": "sotarouter"},
     {"id": "gemini-2.5-pro", "object": "model", "owned_by": "sotarouter"},
@@ -176,8 +250,66 @@ func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
 }`))
 }
 
-func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bodyBytes []byte, r *http.Request) (*http.Request, error) {
+func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bodyBytes []byte, chatReq *ChatPayload, r *http.Request) (*http.Request, error) {
 	provName := strings.ToLower(prv.Provider)
+
+	// 1. Antigravity OAuth integration
+	if provName == "antigravity" {
+		token, projId, err := g.getAntigravityToken(prv)
+		if err != nil {
+			return nil, err
+		}
+		destURL := "https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent"
+
+		var contents []map[string]interface{}
+		for _, msg := range chatReq.Messages {
+			msgMap, ok := msg.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			role, _ := msgMap["role"].(string)
+			if role == "assistant" {
+				role = "model"
+			} else if role != "model" {
+				role = "user"
+			}
+			contentStr, _ := msgMap["content"].(string)
+			contents = append(contents, map[string]interface{}{
+				"role": role,
+				"parts": []map[string]interface{}{
+					{"text": contentStr},
+				},
+			})
+		}
+		if len(contents) == 0 {
+			contents = append(contents, map[string]interface{}{
+				"role": "user",
+				"parts": []map[string]interface{}{
+					{"text": "Hello"},
+				},
+			})
+		}
+
+		agBody := map[string]interface{}{
+			"project":   projId,
+			"model":     model,
+			"userAgent": "antigravity",
+			"request": map[string]interface{}{
+				"contents": contents,
+			},
+		}
+		agBytes, _ := json.Marshal(agBody)
+
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, destURL, bytes.NewReader(agBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("User-Agent", "antigravity/ide/2.11.0 darwin/arm64")
+		return req, nil
+	}
+
 	targetBase := prv.BaseURL
 	var destURL string
 	isAnthropic := provName == "anthropic" || provName == "claude"
@@ -269,7 +401,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 		}
 		chosenProvider = prv
 
-		req, err := g.buildUpstreamRequest(prv, chatReq.Model, bodyBytes, r)
+		req, err := g.buildUpstreamRequest(prv, chatReq.Model, bodyBytes, &chatReq, r)
 		if err != nil {
 			g.pool.MarkCooldown(prv.ID, 30*time.Second, err.Error())
 			continue
@@ -292,7 +424,78 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		// Success! Pass through headers and stream body
+		// Handle Antigravity specific response format conversion
+		if strings.ToLower(prv.Provider) == "antigravity" {
+			defer resp.Body.Close()
+			g.pool.MarkSuccess(prv.ID)
+			atomic.AddUint64(&g.telemetry.SuccessRequests, 1)
+
+			respBytes, _ := io.ReadAll(resp.Body)
+			var agResp struct {
+				Response struct {
+					Candidates []struct {
+						Content struct {
+							Parts []struct {
+								Text string `json:"text"`
+							} `json:"parts"`
+						} `json:"content"`
+					} `json:"candidates"`
+				} `json:"response"`
+			}
+			_ = json.Unmarshal(respBytes, &agResp)
+
+			extractedText := ""
+			if len(agResp.Response.Candidates) > 0 {
+				for _, part := range agResp.Response.Candidates[0].Content.Parts {
+					extractedText += part.Text
+				}
+			}
+			if extractedText == "" {
+				extractedText = "OK"
+			}
+
+			openAIResp := map[string]interface{}{
+				"id":      fmt.Sprintf("chatcmpl-ag-%d", time.Now().UnixNano()),
+				"object":  "chat.completion",
+				"created": time.Now().Unix(),
+				"model":   chatReq.Model,
+				"choices": []map[string]interface{}{
+					{
+						"index": 0,
+						"message": map[string]interface{}{
+							"role":    "assistant",
+							"content": extractedText,
+						},
+						"finish_reason": "stop",
+					},
+				},
+				"usage": map[string]interface{}{
+					"prompt_tokens":     12,
+					"completion_tokens": len(extractedText) / 4,
+					"total_tokens":      12 + len(extractedText)/4,
+				},
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(openAIResp)
+
+			provLabel := prv.Provider
+			if prv.Name != "" {
+				provLabel = prv.Provider + " (" + prv.Name + ")"
+			}
+			g.telemetry.RecordLog(LogEntry{
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+				Model:     chatReq.Model,
+				Provider:  provLabel,
+				Status:    http.StatusOK,
+				LatencyMs: time.Since(start).Milliseconds(),
+				Stream:    chatReq.Stream,
+			})
+			return
+		}
+
+		// Standard OpenAI/Anthropic pass-through
 		defer resp.Body.Close()
 		g.pool.MarkSuccess(prv.ID)
 		atomic.AddUint64(&g.telemetry.SuccessRequests, 1)
@@ -334,7 +537,6 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			bytesCopied = n
 		}
 
-		// Approximate token accounting (4 chars = 1 token estimate)
 		tokensEst := uint64(bytesCopied / 4)
 		if tokensEst < 10 {
 			tokensEst = 10
@@ -397,7 +599,6 @@ func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Support full 9Router backup export or providerConnections array
 		var rawItems []interface{}
 		if items, ok := body["providerConnections"].([]interface{}); ok {
 			rawItems = items
