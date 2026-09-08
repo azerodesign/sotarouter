@@ -130,6 +130,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
   const [loading, setLoading] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [importMode, setImportMode] = useState<"paste" | "file">("file");
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [jsonInput, setJsonInput] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -410,7 +411,136 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
 
       {showCompatible && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><form onSubmit={createCompatible} className="surface w-full max-w-xl rounded-2xl p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between border-b border-zinc-800 pb-5"><div><p className="eyebrow text-emerald-300">Custom provider</p><h2 className="mt-2 text-xl font-semibold text-white">Add {showCompatible === "openai" ? "OpenAI" : "Anthropic"} Compatible</h2><p className="mt-1 text-sm text-zinc-500">Configure a compatible API endpoint.</p></div><button type="button" onClick={() => setShowCompatible(null)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white" aria-label="Close compatible provider dialog"><X className="h-5 w-5" /></button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-xs text-zinc-500 sm:col-span-2">Name<input required value={compatibleName} onChange={(e) => setCompatibleName(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-emerald-400/50" placeholder="OpenAI Compatible (Prod)" /></label><label className="text-xs text-zinc-500">Prefix<input required value={compatiblePrefix} onChange={(e) => setCompatiblePrefix(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-xs text-zinc-200 outline-none focus:border-emerald-400/50" placeholder="oc-prod" /></label><label className="text-xs text-zinc-500">API Type<select value={showCompatible === "openai" ? "chat-completions" : "messages"} disabled className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-300"><option>{showCompatible === "openai" ? "Chat Completions" : "Messages"}</option></select></label><label className="text-xs text-zinc-500 sm:col-span-2">Base URL<input required type="url" value={compatibleBaseUrl} onChange={(e) => setCompatibleBaseUrl(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-xs text-zinc-200 outline-none focus:border-emerald-400/50" placeholder="https://api.openai.com/v1" /><span className="mt-1 block text-[10px] text-zinc-600">Used for model and completion routing.</span></label><label className="text-xs text-zinc-500 sm:col-span-2">API Key (for Check)<input type="password" value={compatibleApiKey} onChange={(e) => setCompatibleApiKey(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-xs text-zinc-200 outline-none focus:border-emerald-400/50" placeholder="sk-..." /></label><label className="text-xs text-zinc-500 sm:col-span-2">Model ID <span className="text-zinc-700">(optional)</span><input value={compatibleModel} onChange={(e) => setCompatibleModel(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 font-mono text-xs text-zinc-200 outline-none focus:border-emerald-400/50" placeholder="e.g. gpt-4, claude-3-opus" /></label></div>{compatibleStatus && <p role="status" className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-300">{compatibleStatus}</p>}<div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setShowCompatible(null)} className="min-h-10 rounded-lg px-4 text-xs text-zinc-400 hover:bg-zinc-800">Cancel</button><button type="button" onClick={() => setCompatibleStatus("Check endpoint is not connected yet") } className="min-h-10 rounded-lg border border-zinc-800 px-4 text-xs font-medium text-zinc-300 hover:bg-zinc-800">Check</button><button type="submit" className="min-h-10 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-300">Create</button></div></form></div>}
 +
-+      {showImport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowImport(false); }}><section role="dialog" aria-modal="true" aria-labelledby="import-title" className="surface w-full max-w-2xl rounded-2xl p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-5"><div><p className="eyebrow text-emerald-300">Manual transfer</p><h2 id="import-title" className="mt-2 text-xl font-semibold text-white">Import provider connections</h2><p className="mt-1 text-sm text-zinc-500">Paste the exported 9Router <code className="font-mono text-zinc-300">providerConnections</code> JSON.</p></div><button type="button" onClick={() => setShowImport(false)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white" aria-label="Close import dialog"><X className="h-5 w-5" /></button></div><textarea autoFocus value={jsonInput} onChange={(event) => setJsonInput(event.target.value)} rows={11} placeholder='[{"id":"...","provider":"antigravity","authType":"oauth","data":{...}}]' className="mt-5 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs leading-5 text-zinc-200 outline-none focus:border-emerald-400/60" />{importStatus && <p role="status" className={`mt-3 rounded-lg border px-3 py-2 font-mono text-xs ${importStatus.startsWith("Import failed") ? "border-rose-400/20 bg-rose-400/5 text-rose-300" : "border-emerald-400/20 bg-emerald-400/5 text-emerald-300"}`}>{importStatus}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowImport(false)} className="min-h-10 rounded-lg px-4 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white">Cancel</button><button type="button" onClick={() => void importJson()} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-300"><Upload className="h-4 w-4" /> Process JSON</button></div></section></div>}
+{showImport && (
+  <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+    role="presentation"
+    onMouseDown={(event) => {
+      if (event.target === event.currentTarget) setShowImport(false);
+    }}
+  >
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="import-title"
+      className="surface w-full max-w-2xl rounded-2xl p-5 shadow-2xl sm:p-6"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-5">
+        <div>
+          <p className="eyebrow text-emerald-300">Data Transfer</p>
+          <h2 id="import-title" className="mt-2 text-xl font-semibold text-white">
+            Import from 9Router Backup
+          </h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Upload file backup <code className="font-mono text-zinc-300">.json</code> / <code className="font-mono text-zinc-300">.sqlite</code> atau paste JSON.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowImport(false)}
+          className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white"
+          aria-label="Close import dialog"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Mode Switcher */}
+      <div className="mt-5 flex gap-2 border-b border-zinc-800 pb-3">
+        <button
+          type="button"
+          onClick={() => setImportMode("file")}
+          className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+            importMode === "file" ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/30" : "text-zinc-400 hover:text-white"
+          }`}
+        >
+          <Upload className="h-3.5 w-3.5" /> Upload File (.json / .txt)
+        </button>
+        <button
+          type="button"
+          onClick={() => setImportMode("paste")}
+          className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+            importMode === "paste" ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/30" : "text-zinc-400 hover:text-white"
+          }`}
+        >
+          <FileJson className="h-3.5 w-3.5" /> Paste Raw JSON
+        </button>
+      </div>
+
+      {importMode === "file" ? (
+        <div className="mt-5">
+          <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-zinc-800 bg-zinc-950/60 p-8 text-center transition hover:border-emerald-400/40 cursor-pointer">
+            <Upload className="h-8 w-8 text-zinc-500 mb-2" />
+            <span className="text-sm font-medium text-zinc-200">Klik untuk pilih file backup</span>
+            <span className="text-xs text-zinc-500 mt-1">Mendukung backup export JSON dari 9Router</span>
+            <input
+              type="file"
+              accept=".json,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                  const content = evt.target?.result as string;
+                  if (content) {
+                    setJsonInput(content);
+                    setImportStatus(`File "${file.name}" loaded (${(file.size / 1024).toFixed(1)} KB). Klik tombol Import sekarang.`);
+                  }
+                };
+                reader.readAsText(file);
+              }}
+            />
+          </label>
+          {jsonInput && (
+            <p className="mt-3 text-xs text-emerald-400 font-mono">
+              ✓ File siap diimport ({jsonInput.length} karakter)
+            </p>
+          )}
+        </div>
+      ) : (
+        <textarea
+          autoFocus
+          value={jsonInput}
+          onChange={(event) => setJsonInput(event.target.value)}
+          rows={9}
+          placeholder='[{"id":"...","provider":"antigravity","authType":"oauth","data":{...}}]'
+          className="mt-4 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs leading-5 text-zinc-200 outline-none focus:border-emerald-400/60"
+        />
+      )}
+
+      {importStatus && (
+        <p
+          role="status"
+          className={`mt-3 rounded-lg border px-3 py-2 font-mono text-xs ${
+            importStatus.startsWith("Import failed")
+              ? "border-rose-400/20 bg-rose-400/5 text-rose-300"
+              : "border-emerald-400/20 bg-emerald-400/5 text-emerald-300"
+          }`}
+        >
+          {importStatus}
+        </p>
+      )}
+
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setShowImport(false)}
+          className="min-h-10 rounded-lg px-4 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-white"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void importJson()}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-300"
+        >
+          <Upload className="h-3.5 w-3.5" /> Start Import
+        </button>
+      </div>
+    </section>
+  </div>
+)}
 
       {selectedProvider && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedProvider(null); }}><section role="dialog" aria-modal="true" aria-labelledby="payload-title" className="surface w-full max-w-2xl rounded-2xl p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-5"><div><p className="eyebrow">Connection payload</p><h2 id="payload-title" className="mt-2 text-xl font-semibold uppercase text-white">{selectedProvider.provider}</h2><p className="mt-1 text-sm text-zinc-500">{selectedProvider.name || selectedProvider.email || selectedProvider.id}</p></div><button type="button" onClick={() => setSelectedProvider(null)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-800 hover:text-white" aria-label="Close payload dialog"><X className="h-5 w-5" /></button></div><pre className="mt-5 max-h-[55vh] overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-[11px] leading-5 text-emerald-300">{JSON.stringify(selectedProvider, null, 2)}</pre><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => void copyText(JSON.stringify(selectedProvider, null, 2), "payload")} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-800 px-4 text-xs font-medium text-zinc-300 hover:bg-zinc-800">{copied === "payload" ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}{copied === "payload" ? "Copied" : "Copy JSON"}</button><button type="button" onClick={() => setSelectedProvider(null)} className="min-h-10 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-300">Close</button></div></section></div>}
     </div>
