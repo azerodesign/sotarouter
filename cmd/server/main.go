@@ -641,7 +641,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 
 	atomic.AddUint64(&g.telemetry.ErrorRequests, 1)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadGateway)
+	w.WriteHeader(http.StatusServiceUnavailable)
 	errMsg := "all upstream providers failed or exhausted"
 	if lastErr != nil {
 		errMsg = lastErr.Error()
@@ -656,7 +656,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Model:     chatReq.Model,
 		Provider:  pName,
-		Status:    http.StatusBadGateway,
+		Status:    http.StatusServiceUnavailable,
 		LatencyMs: time.Since(start).Milliseconds(),
 		Stream:    chatReq.Stream,
 		Error:     errMsg,
