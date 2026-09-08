@@ -147,38 +147,34 @@ export default function GenericProviderPage() {
   const syncModels = useCallback(async () => {
     setModelsLoading(true);
     try {
-      const res = await fetch("/api/models");
+      const res = await fetch(`/api/models?provider=${encodeURIComponent(providerKey)}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
-      if (data && Array.isArray(data.data)) {
-        const matched = data.data.filter((m: { id: string; owned_by?: string }) => {
-          const owner = (m.owned_by || "").toLowerCase();
-          if (providerKey === "antigravity") {
-            return owner === "antigravity" || m.id.startsWith("ag/");
-          }
-          if (providerKey === "codex" || providerKey === "openai") {
-            return owner === "codex" || owner === "openai";
-          }
-          if (providerKey === "claude" || providerKey === "anthropic") {
-            return owner === "claude" || owner === "anthropic";
-          }
-          return owner === providerKey || owner.includes(providerKey);
-        });
+      if (!res.ok) throw new Error(data.error || `Model sync failed (${res.status})`);
 
-        if (matched.length > 0) {
-          setModels(
-            matched.map((m: { id: string }) => ({
-              id: m.id,
-              name: m.id.startsWith("ag/") ? m.id.replace("ag/", "") : m.id,
-              context: "Active Pool",
-              cost: "Free/OAuth",
-            }))
-          );
+      if (Array.isArray(data.data) && data.data.length > 0) {
+        const normalized = data.data
+          .filter((m: { id?: string; owned_by?: string }) => typeof m.id === "string" && m.id.trim())
+          .filter((m: { id: string; owned_by?: string }) => {
+            if (providerKey === "antigravity") return m.id.startsWith("ag/");
+            return true;
+          })
+          .map((m: { id: string }) => ({
+            id: m.id,
+            name: m.id.startsWith("ag/") ? m.id.slice(3) : m.id,
+            context: "Active Pool",
+            cost: providerKey === "antigravity" ? "Free/OAuth" : "Dynamic",
+          }));
+
+        if (normalized.length > 0) {
+          setModels(normalized);
           setLastSynced(new Date().toLocaleTimeString());
           return;
         }
       }
-      setModels(PROVIDER_MODELS[providerKey] || DEFAULT_MODELS);
-      setLastSynced(new Date().toLocaleTimeString());
+
+      throw new Error(`No active ${providerKey} models returned`);
     } catch {
       setModels(PROVIDER_MODELS[providerKey] || DEFAULT_MODELS);
     } finally {
