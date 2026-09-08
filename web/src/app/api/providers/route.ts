@@ -192,10 +192,21 @@ export async function POST(req: Request) {
       name: body.name,
       email: body.email,
       priority: body.priority,
-      data: { apiKey: text(body.apiKey), baseUrl: text(body.baseUrl), apiType: text(body.apiType), model: text(body.model) },
+      data: body.data || { apiKey: text(body.apiKey), baseUrl: text(body.baseUrl), apiType: text(body.apiType), model: text(body.model) },
     }, 0);
     memoryProviders.push(newProvider);
     saveProvidersToDisk(memoryProviders);
+
+    const gatewayUrl = process.env.SOTA_GATEWAY_URL || "https://sota.azero.my.id";
+    try {
+      await fetch(`${gatewayUrl}/api/providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newProvider),
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch {}
+
     return NextResponse.json({ success: true, provider: publicProvider(newProvider), providers: publicProviders() });
   } catch (error: unknown) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 400 });
@@ -208,6 +219,15 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ success: false, error: "id is required" }, { status: 400 });
     memoryProviders = memoryProviders.filter((provider) => provider.id !== id);
     saveProvidersToDisk(memoryProviders);
+
+    const gatewayUrl = process.env.SOTA_GATEWAY_URL || "https://sota.azero.my.id";
+    try {
+      await fetch(`${gatewayUrl}/api/providers?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch {}
+
     return NextResponse.json({ success: true, providers: publicProviders() });
   } catch (error: unknown) {
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 400 });

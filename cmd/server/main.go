@@ -677,6 +677,23 @@ func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodDelete {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, `{"error":"id parameter required"}`, 400)
+			return
+		}
+		if err := g.pool.Delete(id); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), 500)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"deleted": id,
+		})
+		return
+	}
+
 	if r.Method == http.MethodPost {
 		var body map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
