@@ -124,6 +124,21 @@ let memoryProviders: StoredProvider[] = loadProvidersFromDisk();
 
 export async function GET() {
   memoryProviders = loadProvidersFromDisk();
+  if (memoryProviders.length === 0) {
+    const gatewayUrl = process.env.SOTA_GATEWAY_URL || "http://127.0.0.1:3300";
+    try {
+      const res = await fetch(`${gatewayUrl}/api/providers`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { providers?: StoredProvider[] };
+        if (data.providers && data.providers.length > 0) {
+          memoryProviders = data.providers;
+        }
+      }
+    } catch {}
+  }
   return NextResponse.json({ success: true, count: memoryProviders.length, providers: publicProviders() });
 }
 
