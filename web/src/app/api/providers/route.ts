@@ -148,7 +148,7 @@ export async function POST(req: Request) {
       name: body.name,
       email: body.email,
       priority: body.priority,
-      data: { apiKey: text(body.apiKey) },
+      data: { apiKey: text(body.apiKey), baseUrl: text(body.baseUrl), apiType: text(body.apiType), model: text(body.model) },
     }, 0);
     memoryProviders.push(newProvider);
     return NextResponse.json({ success: true, provider: publicProvider(newProvider), providers: publicProviders() });
