@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  const gatewayUrl = process.env.SOTA_GATEWAY_URL || "http://127.0.0.1:3300";
+  const gatewayUrl = process.env.SOTA_GATEWAY_URL || "https://sota.azero.my.id";
   try {
     const res = await fetch(`${gatewayUrl}/api/logs`, {
       cache: "no-store",
