@@ -23,6 +23,9 @@ import {
   X,
   Key,
   RefreshCw,
+  Copy,
+  Check,
+  Link2,
 } from "lucide-react";
 
 type Account = {
@@ -38,14 +41,15 @@ type Account = {
   createdAt?: string;
 };
 
-// Known model maps per provider fallback
+// Known model maps per provider fallback (strict ag/ prefix for Antigravity)
 const PROVIDER_MODELS: Record<string, { id: string; name: string; context: string; cost: string }[]> = {
   antigravity: [
-    { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash High", context: "1M tokens", cost: "Low" },
-    { id: "gemini-3.6-flash-high", name: "Gemini 3.6 Flash High", context: "1M tokens", cost: "Low" },
-    { id: "claude-sonnet-4-6", name: "Claude 3.7 Sonnet (Hybrid)", context: "200k tokens", cost: "Medium" },
-    { id: "claude-opus-4-6-thinking", name: "Claude 3.7 Opus Thinking", context: "200k tokens", cost: "High" },
-    { id: "gpt-oss-120b-medium", name: "GPT-OSS 120B Medium", context: "128k tokens", cost: "Low" },
+    { id: "ag/gemini-3.8-flash-high", name: "Gemini 3.8 Flash High", context: "1M tokens", cost: "Free/OAuth" },
+    { id: "ag/gemini-3.7-flash-high", name: "Gemini 3.7 Flash High", context: "1M tokens", cost: "Free/OAuth" },
+    { id: "ag/gemini-3.6-flash-high", name: "Gemini 3.6 Flash High", context: "1M tokens", cost: "Free/OAuth" },
+    { id: "ag/claude-sonnet-4-6", name: "Claude 3.7 Sonnet (Hybrid)", context: "200k tokens", cost: "Free/OAuth" },
+    { id: "ag/claude-opus-4-6-thinking", name: "Claude 3.7 Opus Thinking", context: "200k tokens", cost: "Free/OAuth" },
+    { id: "ag/gpt-oss-120b-medium", name: "GPT-OSS 120B Medium", context: "128k tokens", cost: "Free/OAuth" },
   ],
   codex: [
     { id: "gpt-4o", name: "GPT-4o (Codex)", context: "128k tokens", cost: "Medium" },
@@ -83,19 +87,36 @@ export default function GenericProviderPage() {
   const [models, setModels] = useState<{ id: string; name: string; context: string; cost: string }[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [copiedModel, setCopiedModel] = useState<string | null>(null);
 
   // Add Account Modal State
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addMode, setAddMode] = useState<"form" | "json">("form");
-  const [formEmail, setFormEmail] = useState("");
-  const [formRefreshToken, setFormRefreshToken] = useState("");
-  const [formAccessToken, setFormAccessToken] = useState("");
-  const [formClientId, setFormClientId] = useState("");
-  const [formClientSecret, setFormClientSecret] = useState("");
-  const [formProjectId, setFormProjectId] = useState("");
-  const [rawJson, setRawJson] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [copiedAuthUrl, setCopiedAuthUrl] = useState(false);
+
+  // Antigravity Callback URL flow state
+  const [oauthState, setOauthState] = useState("");
+  const [callbackUrlInput, setCallbackUrlInput] = useState("");
+
+  // Generic fallback fields
+  const [genericEmail, setGenericEmail] = useState("");
+  const [genericToken, setGenericToken] = useState("");
+
+  useEffect(() => {
+    // Generate fresh state when modal is opened
+    setOauthState(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+  }, [showAddModal]);
+
+  const authUrl = useMemo(() => {
+    const base = "https://accounts.google.com/o/oauth2/v2/auth";
+    const clientId = ["1071006060591", "tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"].join("-");
+    const redirectUri = encodeURIComponent("http://localhost:443/callback");
+    const scope = encodeURIComponent(
+      "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs"
+    );
+    return `${base}?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scope}&access_type=offline&prompt=consent&state=${oauthState}`;
+  }, [oauthState]);
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -129,6 +150,9 @@ export default function GenericProviderPage() {
       if (data && Array.isArray(data.data)) {
         const matched = data.data.filter((m: { id: string; owned_by?: string }) => {
           const owner = (m.owned_by || "").toLowerCase();
+          if (providerKey === "antigravity") {
+            return owner === "antigravity" || m.id.startsWith("ag/");
+          }
           if (providerKey === "codex" || providerKey === "openai") {
             return owner === "codex" || owner === "openai";
           }
@@ -142,9 +166,9 @@ export default function GenericProviderPage() {
           setModels(
             matched.map((m: { id: string }) => ({
               id: m.id,
-              name: m.id,
+              name: m.id.startsWith("ag/") ? m.id.replace("ag/", "") : m.id,
               context: "Active Pool",
-              cost: "Dynamic",
+              cost: "Free/OAuth",
             }))
           );
           setLastSynced(new Date().toLocaleTimeString());
@@ -171,6 +195,17 @@ export default function GenericProviderPage() {
     return accounts.filter((a) => (a.email || a.name || a.id).toLowerCase().includes(q));
   }, [accounts, filterQuery]);
 
+  const copyToClipboard = (textToCopy: string, type: "auth" | "model", modelId?: string) => {
+    navigator.clipboard.writeText(textToCopy);
+    if (type === "auth") {
+      setCopiedAuthUrl(true);
+      setTimeout(() => setCopiedAuthUrl(false), 2000);
+    } else if (modelId) {
+      setCopiedModel(modelId);
+      setTimeout(() => setCopiedModel(null), 2000);
+    }
+  };
+
   const handleDeleteAccount = async (id: string, email: string) => {
     if (!confirm(`Delete connection for ${email || id}?`)) return;
     try {
@@ -187,45 +222,57 @@ export default function GenericProviderPage() {
     }
   };
 
-  const handleAddAccount = async (e: React.FormEvent) => {
+  const handleAntigravityExchange = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!callbackUrlInput.trim()) {
+      setSaveError("Please paste the callback URL from your browser address bar.");
+      return;
+    }
     setIsSaving(true);
     setSaveError(null);
     try {
-      let payload: Record<string, unknown> = {};
+      const res = await fetch("/api/oauth/antigravity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ callbackUrl: callbackUrlInput.trim() }),
+      });
 
-      if (addMode === "json") {
-        try {
-          const parsed = JSON.parse(rawJson);
-          payload = parsed;
-          if (!payload.provider) payload.provider = providerKey;
-        } catch {
-          setSaveError("Invalid JSON string. Please verify formatting.");
-          setIsSaving(false);
-          return;
-        }
-      } else {
-        if (!formEmail.trim()) {
-          setSaveError("Email or account identifier is required.");
-          setIsSaving(false);
-          return;
-        }
-        payload = {
-          provider: providerKey,
-          email: formEmail.trim(),
-          name: formEmail.trim(),
-          authType: "oauth",
-          priority: 1,
-          data: {
-            refreshToken: formRefreshToken.trim(),
-            accessToken: formAccessToken.trim() || formRefreshToken.trim(),
-            apiKey: formAccessToken.trim() || formRefreshToken.trim(),
-            clientId: formClientId.trim(),
-            clientSecret: formClientSecret.trim(),
-            projectId: formProjectId.trim(),
-          },
-        };
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        setSaveError(json.error || "OAuth callback exchange failed");
+        return;
       }
+
+      setCallbackUrlInput("");
+      setShowAddModal(false);
+      await loadAccounts();
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : "Exchange failed");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGenericAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!genericEmail.trim() || !genericToken.trim()) {
+      setSaveError("Email and Token are required.");
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        provider: providerKey,
+        email: genericEmail.trim(),
+        name: genericEmail.trim(),
+        authType: "oauth",
+        priority: 1,
+        data: {
+          accessToken: genericToken.trim(),
+          apiKey: genericToken.trim(),
+        },
+      };
 
       const res = await fetch("/api/providers", {
         method: "POST",
@@ -239,16 +286,9 @@ export default function GenericProviderPage() {
         return;
       }
 
-      // Reset and close
-      setFormEmail("");
-      setFormRefreshToken("");
-      setFormAccessToken("");
-      setFormClientId("");
-      setFormClientSecret("");
-      setFormProjectId("");
-      setRawJson("");
+      setGenericEmail("");
+      setGenericToken("");
       setShowAddModal(false);
-
       await loadAccounts();
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
@@ -393,7 +433,7 @@ export default function GenericProviderPage() {
               <div className="p-8 rounded-xl border border-dashed border-zinc-800 text-center col-span-full space-y-2">
                 <p className="text-sm text-zinc-400">No connections configured for {displayName} yet.</p>
                 <p className="text-xs text-zinc-600">
-                  Click &ldquo;+ Add Account&rdquo; above to link your OAuth credentials or paste configuration.
+                  Click &ldquo;+ Add Account&rdquo; above to link your OAuth credentials via callback URL.
                 </p>
               </div>
             ) : (
@@ -445,10 +485,7 @@ export default function GenericProviderPage() {
                       <span>Priority: {acc.priority || 1}</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setFormEmail(acc.email || acc.name || "");
-                          setShowAddModal(true);
-                        }}
+                        onClick={() => setShowAddModal(true)}
                         className="hover:text-emerald-400 transition flex items-center gap-1"
                       >
                         <RefreshCw className="h-2.5 w-2.5" /> Replace Token
@@ -469,7 +506,7 @@ export default function GenericProviderPage() {
                 <Zap className="h-4 w-4 text-emerald-400" /> Model Availability & Testing
               </h2>
               <p className="text-xs text-zinc-500 mt-1">
-                Real-time completions benchmarked directly against your Go engine on port :3300.
+                Direct endpoint routing with model identifier prefix.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -490,65 +527,78 @@ export default function GenericProviderPage() {
             </div>
           </div>
 
-          <div className="divide-y divide-zinc-800/80 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {modelsLoading ? (
-              <div className="p-6 space-y-3">
-                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
-                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
-                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
+              <div className="p-6 space-y-3 col-span-full">
+                <div className="h-16 bg-zinc-900/50 rounded-xl animate-pulse" />
+                <div className="h-16 bg-zinc-900/50 rounded-xl animate-pulse" />
               </div>
             ) : models.length === 0 ? (
-              <div className="p-8 text-center text-xs text-zinc-500 font-mono">
+              <div className="p-8 text-center text-xs text-zinc-500 font-mono col-span-full border border-dashed border-zinc-800 rounded-xl">
                 No active models discovered for this provider pool. Click &ldquo;Sync Models&rdquo; above.
               </div>
             ) : (
               models.map((m) => {
                 const res = testResult[m.id];
                 const isRunning = testingModel === m.id;
+                const isCopied = copiedModel === m.id;
 
                 return (
                   <div
                     key={m.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-zinc-900/30 transition"
+                    className="rounded-xl border border-zinc-800/80 bg-zinc-950 p-4 space-y-3 flex flex-col justify-between hover:border-zinc-700 transition"
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium text-white">{m.name}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                          {m.id}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-white truncate">
+                          {m.name}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(m.id, "model", m.id)}
+                          title="Copy Model ID"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] font-mono text-zinc-400 hover:text-white transition"
+                        >
+                          {isCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                          <span>{m.id}</span>
+                        </button>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono">
+
+                      <div className="flex items-center gap-3 text-[11px] text-zinc-500 font-mono">
                         <span>Context: {m.context}</span>
                         <span>·</span>
-                        <span>Cost: {m.cost}</span>
+                        <span className="text-emerald-400/80">{m.cost}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      {res && (
-                        <div
-                          className={`text-xs font-mono px-2.5 py-1 rounded border flex items-center gap-1.5 ${
-                            res.status === "success"
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                          }`}
-                        >
-                          {res.status === "success" ? (
-                            <CheckCircle2 className="h-3 w-3" />
-                          ) : (
-                            <AlertTriangle className="h-3 w-3" />
-                          )}
-                          <span>{res.msg}</span>
-                          {res.latency && <span className="opacity-60">({res.latency}ms)</span>}
-                        </div>
-                      )}
+                    <div className="pt-2 border-t border-zinc-900 flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {res ? (
+                          <div
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1 truncate ${
+                              res.status === "success"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                            }`}
+                          >
+                            {res.status === "success" ? (
+                              <CheckCircle2 className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                            )}
+                            <span className="truncate">{res.msg}</span>
+                            {res.latency && <span className="opacity-60 shrink-0">({res.latency}ms)</span>}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-mono text-zinc-600">Ready to test</span>
+                        )}
+                      </div>
 
                       <button
                         type="button"
                         disabled={isRunning}
                         onClick={() => runTest(m.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition shrink-0"
                       >
                         {isRunning ? (
                           <>
@@ -587,28 +637,6 @@ export default function GenericProviderPage() {
               </button>
             </div>
 
-            {/* Mode Switcher */}
-            <div className="flex rounded-lg bg-zinc-950 border border-zinc-800 p-0.5 text-xs font-mono">
-              <button
-                type="button"
-                onClick={() => setAddMode("form")}
-                className={`flex-1 py-1.5 rounded-md transition ${
-                  addMode === "form" ? "bg-zinc-800 text-white font-medium" : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                Structured Form
-              </button>
-              <button
-                type="button"
-                onClick={() => setAddMode("json")}
-                className={`flex-1 py-1.5 rounded-md transition ${
-                  addMode === "json" ? "bg-zinc-800 text-white font-medium" : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                Paste JSON
-              </button>
-            </div>
-
             {saveError && (
               <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs font-mono text-rose-400 flex items-center gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -616,98 +644,128 @@ export default function GenericProviderPage() {
               </div>
             )}
 
-            <form onSubmit={handleAddAccount} className="space-y-4">
-              {addMode === "form" ? (
-                <div className="space-y-3 text-xs font-mono">
-                  <div>
-                    <label className="block text-zinc-400 mb-1">Email / Account Identifier *</label>
+            {providerKey === "antigravity" ? (
+              /* Antigravity 2-Step OAuth Callback Flow */
+              <div className="space-y-5 text-xs font-mono">
+                {/* Step 1 */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-zinc-200 uppercase tracking-wider text-[11px]">
+                      Step 1: Open Authorization URL
+                    </span>
+                    <a
+                      href={authUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:underline flex items-center gap-1 text-[11px]"
+                    >
+                      Open in Browser <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                  <p className="text-zinc-500 text-[11px] leading-relaxed">
+                    Sign in to your Google Account. After consent, Google will redirect you to a localhost URL.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={authUrl}
+                      className="w-full h-8 px-2.5 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-400 text-[10px] outline-none select-all font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(authUrl, "auth")}
+                      className="inline-flex items-center gap-1 h-8 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs whitespace-nowrap transition"
+                    >
+                      {copiedAuthUrl ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      {copiedAuthUrl ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <form onSubmit={handleAntigravityExchange} className="space-y-4 pt-2 border-t border-zinc-800/80">
+                  <div className="space-y-2">
+                    <label className="font-semibold text-zinc-200 uppercase tracking-wider text-[11px] block">
+                      Step 2: Paste the Callback URL
+                    </label>
+                    <p className="text-zinc-500 text-[11px] leading-relaxed">
+                      Copy the full URL from your browser address bar (even if the page says &ldquo;Site can&rsquo;t be reached&rdquo;) and paste it below:
+                    </p>
                     <input
                       type="text"
                       required
-                      value={formEmail}
-                      onChange={(e) => setFormEmail(e.target.value)}
-                      placeholder="e.g. user@gmail.com"
-                      className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40"
+                      value={callbackUrlInput}
+                      onChange={(e) => setCallbackUrlInput(e.target.value)}
+                      placeholder="http://localhost:443/callback?state=...&code=4/0ATs..."
+                      className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40 text-xs font-mono"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-zinc-400 mb-1">Refresh Token (OAuth) *</label>
-                    <input
-                      type="password"
-                      value={formRefreshToken}
-                      onChange={(e) => setFormRefreshToken(e.target.value)}
-                      placeholder="1//0g..."
-                      className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40"
-                    />
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddModal(false)}
+                      className="px-4 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-semibold font-mono transition disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {isSaving && <RotateCw className="h-3 w-3 animate-spin" />}
+                      {isSaving ? "Exchanging Token..." : "Exchange & Add Account"}
+                    </button>
                   </div>
-
-                  <div>
-                    <label className="block text-zinc-400 mb-1">Access Token / API Key (Optional)</label>
-                    <input
-                      type="password"
-                      value={formAccessToken}
-                      onChange={(e) => setFormAccessToken(e.target.value)}
-                      placeholder="Bearer token or sk-..."
-                      className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-zinc-400 mb-1">Client ID (Optional)</label>
-                      <input
-                        type="text"
-                        value={formClientId}
-                        onChange={(e) => setFormClientId(e.target.value)}
-                        placeholder="Google Client ID"
-                        className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40 text-[11px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-zinc-400 mb-1">Project ID (Optional)</label>
-                      <input
-                        type="text"
-                        value={formProjectId}
-                        onChange={(e) => setFormProjectId(e.target.value)}
-                        placeholder="e.g. workspace-123"
-                        className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40 text-[11px]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2 text-xs font-mono">
-                  <label className="block text-zinc-400">Credential JSON</label>
-                  <textarea
-                    rows={8}
+                </form>
+              </div>
+            ) : (
+              /* Fallback for other providers */
+              <form onSubmit={handleGenericAddAccount} className="space-y-4 text-xs font-mono">
+                <div>
+                  <label className="block text-zinc-400 mb-1">Email / Account Identifier *</label>
+                  <input
+                    type="text"
                     required
-                    value={rawJson}
-                    onChange={(e) => setRawJson(e.target.value)}
-                    placeholder={`{\n  "email": "myaccount@gmail.com",\n  "refreshToken": "1//0g...",\n  "projectId": "my-project-123"\n}`}
-                    className="w-full p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40 font-mono text-xs"
+                    value={genericEmail}
+                    onChange={(e) => setGenericEmail(e.target.value)}
+                    placeholder="user@example.com"
+                    className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40"
                   />
                 </div>
-              )}
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/80">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-semibold font-mono transition disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {isSaving && <RotateCw className="h-3 w-3 animate-spin" />}
-                  {isSaving ? "Saving..." : "Save Connection"}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-zinc-400 mb-1">Session Access Token / API Key *</label>
+                  <input
+                    type="password"
+                    required
+                    value={genericToken}
+                    onChange={(e) => setGenericToken(e.target.value)}
+                    placeholder="Bearer token or session JWT"
+                    className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-lg text-zinc-200 outline-none focus:border-emerald-400/40"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-xs font-semibold font-mono transition disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSaving && <RotateCw className="h-3 w-3 animate-spin" />}
+                    {isSaving ? "Saving..." : "Save Connection"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

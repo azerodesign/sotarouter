@@ -196,6 +196,14 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 	var exactMatches []*Provider
 	var generalCandidates []*Provider
 
+	isAGModel := strings.HasPrefix(model, "ag/") ||
+		model == "gemini-3.8-flash-high" ||
+		model == "gemini-3.7-flash-high" ||
+		model == "gemini-3.6-flash-high" ||
+		model == "claude-sonnet-4-6" ||
+		model == "claude-opus-4-6-thinking" ||
+		model == "gpt-oss-120b-medium"
+
 	for _, prv := range p.providers {
 		if !prv.IsActive {
 			continue
@@ -206,11 +214,20 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 
 		pName := strings.ToLower(prv.Provider)
 
+		// Strict route: Antigravity models must ONLY route to Antigravity
+		if isAGModel {
+			if pName == "antigravity" {
+				exactMatches = append(exactMatches, prv)
+			}
+			continue
+		}
+
 		// Check if modelLocks exist
 		if len(prv.ModelLocks) > 0 {
 			matched := false
 			for _, lock := range prv.ModelLocks {
-				if lock == model || lock == "modelLock_"+model {
+				cleanLock := strings.TrimPrefix(lock, "modelLock_")
+				if cleanLock == model || lock == model {
 					matched = true
 					break
 				}
@@ -221,13 +238,6 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 			continue
 		}
 
-		// Hint matching based on model family
-		if strings.HasPrefix(model, "gemini-") || strings.HasPrefix(model, "claude-") || strings.HasPrefix(model, "gpt-oss-") {
-			if pName == "antigravity" {
-				exactMatches = append(exactMatches, prv)
-				continue
-			}
-		}
 		if strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "chatgpt") {
 			if pName == "codex" || pName == "openai" {
 				exactMatches = append(exactMatches, prv)
@@ -239,7 +249,7 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 	}
 
 	candidates := exactMatches
-	if len(candidates) == 0 {
+	if len(candidates) == 0 && !isAGModel {
 		candidates = generalCandidates
 	}
 

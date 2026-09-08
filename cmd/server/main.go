@@ -263,7 +263,7 @@ func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
 				"gemini-3.8-flash-high", "gemini-3.7-flash-high", "gemini-3.6-flash-high",
 				"claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium",
 			} {
-				modelMap[m] = "antigravity"
+				modelMap["ag/"+m] = "antigravity"
 			}
 		case "codex", "openai":
 			for _, m := range []string{
@@ -317,9 +317,10 @@ func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
 
 func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bodyBytes []byte, chatReq *ChatPayload, r *http.Request) (*http.Request, error) {
 	provName := strings.ToLower(prv.Provider)
+	rawModel := strings.TrimPrefix(model, "ag/")
 
-	// 1. Antigravity OAuth integration
-	if provName == "antigravity" {
+	// 1. Antigravity OAuth integration (Google Cloud CodeAssist)
+	if provName == "antigravity" || strings.HasPrefix(model, "ag/") {
 		token, projId, err := g.getAntigravityToken(prv)
 		if err != nil {
 			return nil, err
@@ -357,7 +358,7 @@ func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bod
 
 		agBody := map[string]interface{}{
 			"project":   projId,
-			"model":     model,
+			"model":     rawModel,
 			"userAgent": "antigravity",
 			"request": map[string]interface{}{
 				"contents": contents,
@@ -510,7 +511,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 		}
 
 		// Handle Antigravity specific response format conversion
-		if strings.ToLower(prv.Provider) == "antigravity" {
+		if strings.ToLower(prv.Provider) == "antigravity" || strings.HasPrefix(chatReq.Model, "ag/") {
 			defer resp.Body.Close()
 			g.pool.MarkSuccess(prv.ID)
 			atomic.AddUint64(&g.telemetry.SuccessRequests, 1)
