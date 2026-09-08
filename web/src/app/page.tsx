@@ -76,8 +76,8 @@ export default function Home() {
               <div className="inline-flex items-center gap-2 text-emerald-400 text-xs font-mono font-semibold uppercase tracking-wider">
                 <Server className="w-4 h-4" /> Self-Hosted / Local Machine
               </div>
-              <h2 className="text-2xl font-bold text-white mt-1">Run SotaRouter Locally</h2>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">Development setup for the current Next.js control plane. The Go data plane is still under construction.</p>
+              <h2 className="text-2xl font-bold text-white mt-1">Run SotaRouter Live</h2>
+              <p className="text-xs sm:text-sm text-zinc-400 mt-1">High-throughput Go data plane with automatic failover and smart key pooling.</p>
             </div>
 
             <div className="flex items-center gap-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800 text-xs font-mono">
