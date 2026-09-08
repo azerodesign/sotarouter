@@ -81,8 +81,8 @@ export default function GenericProviderPage() {
   const [testingModel, setTestingModel] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { status: string; latency?: number; msg?: string }>>({});
   const [filterQuery, setFilterQuery] = useState("");
-
-  const models = PROVIDER_MODELS[providerKey] || DEFAULT_MODELS;
+  const [models, setModels] = useState<{ id: string; name: string; context: string; cost: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/providers")
@@ -97,6 +97,40 @@ export default function GenericProviderPage() {
         }
       })
       .finally(() => setLoading(false));
+
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && Array.isArray(data.data)) {
+          const matched = data.data.filter((m: { id: string; owned_by?: string }) => {
+            const owner = (m.owned_by || "").toLowerCase();
+            if (providerKey === "codex" || providerKey === "openai") {
+              return owner === "codex" || owner === "openai";
+            }
+            if (providerKey === "claude" || providerKey === "anthropic") {
+              return owner === "claude" || owner === "anthropic";
+            }
+            return owner === providerKey || owner.includes(providerKey);
+          });
+
+          if (matched.length > 0) {
+            setModels(
+              matched.map((m: { id: string }) => ({
+                id: m.id,
+                name: m.id,
+                context: "Active Pool",
+                cost: "Dynamic",
+              }))
+            );
+            return;
+          }
+        }
+        setModels(PROVIDER_MODELS[providerKey] || DEFAULT_MODELS);
+      })
+      .catch(() => {
+        setModels(PROVIDER_MODELS[providerKey] || DEFAULT_MODELS);
+      })
+      .finally(() => setModelsLoading(false));
   }, [providerKey]);
 
   const filteredAccounts = useMemo(() => {
@@ -290,68 +324,80 @@ export default function GenericProviderPage() {
           </div>
 
           <div className="divide-y divide-zinc-800/80 rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden">
-            {models.map((m) => {
-              const res = testResult[m.id];
-              const isRunning = testingModel === m.id;
+            {modelsLoading ? (
+              <div className="p-6 space-y-3">
+                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
+                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
+                <div className="h-12 bg-zinc-900/50 rounded-lg animate-pulse" />
+              </div>
+            ) : models.length === 0 ? (
+              <div className="p-8 text-center text-xs text-zinc-500 font-mono">
+                No active models discovered for this provider pool.
+              </div>
+            ) : (
+              models.map((m) => {
+                const res = testResult[m.id];
+                const isRunning = testingModel === m.id;
 
-              return (
-                <div
-                  key={m.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-zinc-900/30 transition"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-medium text-white">{m.name}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                        {m.id}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono">
-                      <span>Context: {m.context}</span>
-                      <span>·</span>
-                      <span>Cost: {m.cost}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {res && (
-                      <div
-                        className={`text-xs font-mono px-2.5 py-1 rounded border flex items-center gap-1.5 ${
-                          res.status === "success"
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                        }`}
-                      >
-                        {res.status === "success" ? (
-                          <CheckCircle2 className="h-3 w-3" />
-                        ) : (
-                          <AlertTriangle className="h-3 w-3" />
-                        )}
-                        <span>{res.msg}</span>
-                        {res.latency && <span className="opacity-60">({res.latency}ms)</span>}
+                return (
+                  <div
+                    key={m.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 hover:bg-zinc-900/30 transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium text-white">{m.name}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                          {m.id}
+                        </span>
                       </div>
-                    )}
+                      <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono">
+                        <span>Context: {m.context}</span>
+                        <span>·</span>
+                        <span>Cost: {m.cost}</span>
+                      </div>
+                    </div>
 
-                    <button
-                      type="button"
-                      disabled={isRunning}
-                      onClick={() => runTest(m.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition"
-                    >
-                      {isRunning ? (
-                        <>
-                          <RotateCw className="h-3.5 w-3.5 animate-spin" /> Testing...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-3.5 w-3.5 fill-current" /> Test
-                        </>
+                    <div className="flex items-center gap-3">
+                      {res && (
+                        <div
+                          className={`text-xs font-mono px-2.5 py-1 rounded border flex items-center gap-1.5 ${
+                            res.status === "success"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                          }`}
+                        >
+                          {res.status === "success" ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : (
+                            <AlertTriangle className="h-3 w-3" />
+                          )}
+                          <span>{res.msg}</span>
+                          {res.latency && <span className="opacity-60">({res.latency}ms)</span>}
+                        </div>
                       )}
-                    </button>
+
+                      <button
+                        type="button"
+                        disabled={isRunning}
+                        onClick={() => runTest(m.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 text-zinc-950 text-xs font-semibold font-mono transition"
+                      >
+                        {isRunning ? (
+                          <>
+                            <RotateCw className="h-3.5 w-3.5 animate-spin" /> Testing...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3.5 w-3.5 fill-current" /> Test
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

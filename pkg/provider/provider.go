@@ -83,10 +83,16 @@ func (p *Pool) load() error {
 			}
 		}
 		if item.APIKey == "" && item.Data != nil {
-			if k, ok := item.Data["apiKey"].(string); ok {
+			if k, ok := item.Data["apiKey"].(string); ok && k != "" {
 				item.APIKey = k
-			} else if k, ok := item.Data["accessToken"].(string); ok {
+			} else if k, ok := item.Data["accessToken"].(string); ok && k != "" {
 				item.APIKey = k
+			} else if sub, ok := item.Data["data"].(map[string]interface{}); ok {
+				if k, ok := sub["accessToken"].(string); ok && k != "" {
+					item.APIKey = k
+				} else if k, ok := sub["apiKey"].(string); ok && k != "" {
+					item.APIKey = k
+				}
 			}
 		}
 		// Extract modelLocks from nested data if empty
@@ -218,6 +224,12 @@ func (p *Pool) NextCandidate(model string) (*Provider, error) {
 		// Hint matching based on model family
 		if strings.HasPrefix(model, "gemini-") || strings.HasPrefix(model, "claude-") || strings.HasPrefix(model, "gpt-oss-") {
 			if pName == "antigravity" {
+				exactMatches = append(exactMatches, prv)
+				continue
+			}
+		}
+		if strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "chatgpt") {
+			if pName == "codex" || pName == "openai" {
 				exactMatches = append(exactMatches, prv)
 				continue
 			}

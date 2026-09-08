@@ -224,30 +224,95 @@ func (g *Gateway) handleLogsAPI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type ModelItem struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+type ModelListResponse struct {
+	Object string      `json:"object"`
+	Data   []ModelItem `json:"data"`
+}
+
 func (g *Gateway) handleModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{
-  "object": "list",
-  "data": [
-    {"id": "gpt-4o", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gpt-4o-mini", "object": "model", "owned_by": "sotarouter"},
-    {"id": "claude-3-7-sonnet", "object": "model", "owned_by": "sotarouter"},
-    {"id": "claude-3-5-sonnet", "object": "model", "owned_by": "sotarouter"},
-    {"id": "claude-3-5-haiku", "object": "model", "owned_by": "sotarouter"},
-    {"id": "claude-sonnet-4-6", "object": "model", "owned_by": "sotarouter"},
-    {"id": "claude-opus-4-6-thinking", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gemini-3.8-flash-high", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gemini-3.7-flash-high", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gemini-3.6-flash-high", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gpt-oss-120b-medium", "object": "model", "owned_by": "sotarouter"},
-    {"id": "deepseek-chat", "object": "model", "owned_by": "sotarouter"},
-    {"id": "deepseek-reasoner", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gemini-2.5-pro", "object": "model", "owned_by": "sotarouter"},
-    {"id": "gemini-2.5-flash", "object": "model", "owned_by": "sotarouter"},
-    {"id": "o1-preview", "object": "model", "owned_by": "sotarouter"},
-    {"id": "o3-mini", "object": "model", "owned_by": "sotarouter"}
-  ]
-}`))
+
+	provs := g.pool.List()
+	modelMap := make(map[string]string) // modelID -> provider owner
+
+	for _, p := range provs {
+		if !p.IsActive {
+			continue
+		}
+		pName := strings.ToLower(p.Provider)
+
+		// 1. Add modelLocks
+		for _, m := range p.ModelLocks {
+			clean := strings.TrimPrefix(m, "modelLock_")
+			if clean != "" {
+				modelMap[clean] = pName
+			}
+		}
+
+		// 2. Add provider standard models
+		switch pName {
+		case "antigravity":
+			for _, m := range []string{
+				"gemini-3.8-flash-high", "gemini-3.7-flash-high", "gemini-3.6-flash-high",
+				"claude-sonnet-4-6", "claude-opus-4-6-thinking", "gpt-oss-120b-medium",
+			} {
+				modelMap[m] = "antigravity"
+			}
+		case "codex", "openai":
+			for _, m := range []string{
+				"gpt-4o", "gpt-4o-mini", "o1-preview", "o3-mini", "gpt-4-turbo",
+			} {
+				modelMap[m] = "codex"
+			}
+		case "anthropic", "claude":
+			for _, m := range []string{
+				"claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku",
+			} {
+				modelMap[m] = "anthropic"
+			}
+		case "deepseek":
+			for _, m := range []string{
+				"deepseek-chat", "deepseek-reasoner",
+			} {
+				modelMap[m] = "deepseek"
+			}
+		case "groq":
+			for _, m := range []string{
+				"llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768",
+			} {
+				modelMap[m] = "groq"
+			}
+		case "gemini":
+			for _, m := range []string{
+				"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash",
+			} {
+				modelMap[m] = "gemini"
+			}
+		}
+	}
+
+	var data []ModelItem
+	now := time.Now().Unix()
+	for id, owner := range modelMap {
+		data = append(data, ModelItem{
+			ID:      id,
+			Object:  "model",
+			Created: now,
+			OwnedBy: owner,
+		})
+	}
+
+	json.NewEncoder(w).Encode(ModelListResponse{
+		Object: "list",
+		Data:   data,
+	})
 }
 
 func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bodyBytes []byte, chatReq *ChatPayload, r *http.Request) (*http.Request, error) {
@@ -342,15 +407,35 @@ func (g *Gateway) buildUpstreamRequest(prv *provider.Provider, model string, bod
 		return nil, err
 	}
 
+	key := prv.APIKey
+	if key == "" && prv.Data != nil {
+		if k, ok := prv.Data["apiKey"].(string); ok && k != "" {
+			key = k
+		} else if k, ok := prv.Data["accessToken"].(string); ok && k != "" {
+			key = k
+		} else if sub, ok := prv.Data["data"].(map[string]interface{}); ok {
+			if k, ok := sub["accessToken"].(string); ok && k != "" {
+				key = k
+			} else if k, ok := sub["apiKey"].(string); ok && k != "" {
+				key = k
+			}
+		}
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	if isAnthropic {
-		if prv.APIKey != "" {
-			req.Header.Set("x-api-key", prv.APIKey)
+		if key != "" {
+			req.Header.Set("x-api-key", key)
 		}
 		req.Header.Set("anthropic-version", "2023-06-01")
 	} else {
-		if prv.APIKey != "" {
-			req.Header.Set("Authorization", "Bearer "+prv.APIKey)
+		if key != "" {
+			req.Header.Set("Authorization", "Bearer "+key)
+		}
+		if provName == "codex" {
+			req.Header.Set("User-Agent", "codex_cli_rs/0.136.0")
+			req.Header.Set("originator", "codex_cli_rs")
+			req.Header.Set("session_id", "default")
 		}
 	}
 
@@ -389,7 +474,7 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Retry loop with failover / pool cooldown
-	maxRetries := 3
+	maxRetries := 5
 	var lastErr error
 	var chosenProvider *provider.Provider
 
@@ -414,13 +499,13 @@ func (g *Gateway) handleChatCompletions(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		// Check for rate limit or server error to trigger failover
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+		// Check for auth error, rate limit or server error to trigger failover
+		if resp.StatusCode == 401 || resp.StatusCode == 403 || resp.StatusCode == 429 || resp.StatusCode >= 500 {
 			respBytes, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			errMsg := fmt.Sprintf("upstream error %d: %s", resp.StatusCode, string(respBytes))
-			g.pool.MarkCooldown(prv.ID, 60*time.Second, errMsg)
-			lastErr = fmt.Errorf("provider %s failed: %d", prv.Provider, resp.StatusCode)
+			g.pool.MarkCooldown(prv.ID, 300*time.Second, errMsg)
+			lastErr = fmt.Errorf("provider %s failed: %d (%s)", prv.Provider, resp.StatusCode, string(respBytes))
 			continue
 		}
 
