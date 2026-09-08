@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://app.sota.azero.my.id"),
   title: "SotaRouter — High Performance AI Gateway",
   description: "Unified AI Router & Key Pool Engine",
 };

@@ -4,9 +4,11 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Next.js](https://img.shields.io/badge/Next.js-16+-black?logo=next.dot.js)](https://nextjs.org)
 
-Ultra-low latency AI Gateway & Smart Key Pool built with a high-concurrency Go core and a modern Next.js management dashboard.
+## 🌐 Live Production Deployments
 
-SotaRouter acts as a unified reverse proxy and intelligent load balancer for LLM APIs (OpenAI, Anthropic, Gemini, DeepSeek, Groq, OpenRouter, and custom endpoints).
+- **Control Plane (Dashboard)**: [https://app.sota.azero.my.id](https://app.sota.azero.my.id)
+- **Data Plane (AI Gateway API)**: `https://sota.azero.my.id/v1`
+- **Gateway Health Check**: `https://sota.azero.my.id/health`
 
 ---
 

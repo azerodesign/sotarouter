@@ -105,6 +105,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.URL.Path {
+	case "/":
+		http.Redirect(w, r, "https://app.sota.azero.my.id/dashboard", http.StatusTemporaryRedirect)
+		return
 	case "/health":
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{

@@ -834,8 +834,38 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
               <div className="mt-4 space-y-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
                   <div>
-                    <span className="text-zinc-500">Localhost (VPS): </span>
-                    <span className="text-emerald-400">http://127.0.0.1:3300/v1</span>
+                    <span className="text-zinc-500">Control Plane (Web UI): </span>
+                    <span className="text-emerald-400 font-semibold">https://app.sota.azero.my.id</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyText("https://app.sota.azero.my.id", "control_plane_url")}
+                    className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-white"
+                  >
+                    {copied === "control_plane_url" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
+                  <div>
+                    <span className="text-zinc-500">Data Plane (AI Gateway API): </span>
+                    <span className="text-emerald-400 font-semibold">https://sota.azero.my.id/v1</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyText("https://sota.azero.my.id/v1", "data_plane_url")}
+                    className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-white"
+                  >
+                    {copied === "data_plane_url" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
+                  <div>
+                    <span className="text-zinc-500">Localhost (VPS Direct): </span>
+                    <span className="text-zinc-400">http://127.0.0.1:3300/v1</span>
                   </div>
                   <button
                     type="button"
@@ -846,35 +876,38 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
                     Copy
                   </button>
                 </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
-                  <div>
-                    <span className="text-zinc-500">Public Domain: </span>
-                    <span className="text-emerald-400">https://sota.azero.my.id/v1</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => copyText("https://sota.azero.my.id/v1", "public_url")}
-                    className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-white"
-                  >
-                    {copied === "public_url" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                    Copy
-                  </button>
-                </div>
               </div>
             </article>
 
             <article className="surface rounded-2xl p-6">
               <h2 className="text-base font-semibold text-white">cURL Example</h2>
               <pre className="mt-4 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-zinc-300">
-{`curl http://127.0.0.1:3300/v1/chat/completions \\
+{`curl https://sota.azero.my.id/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer sotarouter-token" \\
+  -H "Authorization: Bearer ***" \\
   -d '{
     "model": "gpt-4o",
     "messages": [{"role": "user", "content": "Hello from SotaRouter"}],
     "stream": true
   }'`}
+              </pre>
+            </article>
+
+            <article className="surface rounded-2xl p-6">
+              <h2 className="text-base font-semibold text-white">OpenAI Python SDK</h2>
+              <pre className="mt-4 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-zinc-300">
+{`from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://sota.azero.my.id/v1",
+    api_key="sotarouter-key"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello SotaRouter"}],
+    stream=True
+)`}
               </pre>
             </article>
           </div>
