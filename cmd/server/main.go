@@ -1,66 +1,93 @@
 package main
 
 import (
-	"embed"
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"io/fs"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
-//go:embed app/*
-var appFS embed.FS
+type Config struct{ APIKey, Upstream, UpstreamKey string }
+
+func gatewayHandler(cfg Config) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"status":"ok","engine":"SotaRouter"}`)
+	})
+	mux.HandleFunc("/v1/chat/completions", proxyChat(cfg))
+	return mux
+}
+
+func proxyChat(cfg Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if cfg.APIKey != "" && r.Header.Get("Authorization") != "Bearer "+cfg.APIKey {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if cfg.Upstream == "" {
+			http.Error(w, "upstream not configured", http.StatusServiceUnavailable)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+		if err != nil {
+			http.Error(w, "invalid request", 400)
+			return
+		}
+		var payload json.RawMessage
+		if json.Unmarshal(body, &payload) != nil {
+			http.Error(w, "invalid JSON", 400)
+			return
+		}
+		u, err := url.Parse(strings.TrimRight(cfg.Upstream, "/") + "/v1/chat/completions")
+		if err != nil {
+			http.Error(w, "invalid upstream", 500)
+			return
+		}
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, u.String(), bytes.NewReader(body))
+		if err != nil {
+			http.Error(w, "upstream request failed", 502)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cfg.UpstreamKey != "" {
+			req.Header.Set("Authorization", "Bearer "+cfg.UpstreamKey)
+		}
+		resp, err := (&http.Client{Timeout: 120 * time.Second}).Do(req)
+		if err != nil {
+			http.Error(w, "upstream unavailable", 502)
+			return
+		}
+		defer resp.Body.Close()
+		for k, values := range resp.Header {
+			for _, value := range values {
+				w.Header().Add(k, value)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+	}
+}
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
-	// Extract sub filesystem for static web UI
-	publicFS, err := fs.Sub(appFS, "app")
-	if err != nil {
-		log.Fatalf("Failed to load embedded filesystem: %v", err)
-	}
-
-	mux := http.NewServeMux()
-
-	// 1. Static Web UI Server
-	fileServer := http.FileServer(http.FS(publicFS))
-	mux.Handle("/", fileServer)
-
-	// 2. Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","engine":"SotaRouter","version":"1.0.0-go","timestamp":"%s"}`, time.Now().Format(time.RFC3339))
-	})
-
-	// 3. Unified OpenAI / Anthropic Chat Completions Proxy Mock
-	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-			return
-		}
-
-		// Mock SSE response
-		fmt.Fprintf(w, "data: {\"id\":\"sota-123\",\"object\":\"chat.completion.chunk\",\"created\":%d,\"model\":\"sota-auto-fast\",\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"SotaRouter: Ultra-fast response from Go engine.\"}}]}\n\n", time.Now().Unix())
-		flusher.Flush()
-
-		time.Sleep(50 * time.Millisecond)
-
-		fmt.Fprintf(w, "data: [DONE]\n\n")
-		flusher.Flush()
-	})
-
-	log.Printf("[SotaRouter] Starting server on http://0.0.0.0:%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatalf("Server exited with error: %v", err)
+	cfg := Config{APIKey: os.Getenv("SOTA_API_KEY"), Upstream: os.Getenv("SOTA_UPSTREAM_URL"), UpstreamKey: os.Getenv("SOTA_UPSTREAM_KEY")}
+	log.Printf("[SotaRouter] gateway listening on :%s", port)
+	if err := http.ListenAndServe(":"+port, gatewayHandler(cfg)); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
