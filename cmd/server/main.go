@@ -217,17 +217,47 @@ func (g *Gateway) handleProvidersAPI(w http.ResponseWriter, r *http.Request) {
 		if rawItems, ok := body["providerConnections"].([]interface{}); ok {
 			count := 0
 			for _, item := range rawItems {
-				if b, err := json.Marshal(item); err == nil {
-					var prv provider.Provider
-					if json.Unmarshal(b, &prv) == nil && prv.Provider != "" {
-						if prv.ID == "" {
-							prv.ID = fmt.Sprintf("prv_%d", time.Now().UnixNano())
-						}
-						prv.IsActive = true
-						g.pool.Upsert(&prv)
-						count++
-					}
+				itemMap, ok := item.(map[string]interface{})
+				if !ok {
+					continue
 				}
+				provName, _ := itemMap["provider"].(string)
+				if provName == "" {
+					continue
+				}
+				id, _ := itemMap["id"].(string)
+				if id == "" {
+					id = fmt.Sprintf("prv_%d", time.Now().UnixNano())
+				}
+				name, _ := itemMap["name"].(string)
+				email, _ := itemMap["email"].(string)
+				authType, _ := itemMap["authType"].(string)
+				priority := 1
+				if p, ok := itemMap["priority"].(float64); ok {
+					priority = int(p)
+				}
+
+				// Extract API key and BaseURL
+				apiKey, _ := itemMap["apiKey"].(string)
+				if apiKey == "" {
+					apiKey, _ = itemMap["accessToken"].(string)
+				}
+				baseUrl, _ := itemMap["baseUrl"].(string)
+
+				prv := &provider.Provider{
+					ID:       id,
+					Provider: provName,
+					Name:     name,
+					Email:    email,
+					AuthType: authType,
+					Priority: priority,
+					IsActive: true,
+					BaseURL:  baseUrl,
+					APIKey:   apiKey,
+					Data:     itemMap,
+				}
+				g.pool.Upsert(prv)
+				count++
 			}
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": true,
