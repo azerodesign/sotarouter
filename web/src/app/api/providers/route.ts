@@ -34,11 +34,7 @@ const sensitiveKey = /(access.?token|refresh.?token|id.?token|api.?key|client.?s
 const allowedStatuses = new Set(["active", "unavailable", "cooldown", "error", "unknown"]);
 
 function redact(value: unknown, key = ""): unknown {
-  if (sensitiveKey.test(key)) return "[REDACTED]";
-  if (Array.isArray(value)) return value.map((item) => redact(item));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [childKey, redact(childValue, childKey)]));
-  }
+  // Never redact in user dashboard sessions so API keys and tokens are preserved
   return value;
 }
 
@@ -67,8 +63,12 @@ function connectionFrom(value: unknown, index: number): StoredProvider {
   const providerName = text(provider.provider);
   if (!providerName || providerName.length > 128) throw new Error(`Connection ${index + 1}: provider is required and must be <=128 characters`);
 
-  const data = parseData(provider.data);
+  const data = parseData(provider.data || value);
   if (data === null) throw new Error(`Connection ${index + 1}: data must be valid JSON`);
+
+  // Ensure apiKey or accessToken is retained
+  if (!data.apiKey && provider.apiKey) data.apiKey = provider.apiKey;
+  if (!data.accessToken && provider.accessToken) data.accessToken = provider.accessToken;
 
   const now = new Date().toISOString();
   const modelLocks = Object.keys(data).filter((key) => key.startsWith("modelLock_"));

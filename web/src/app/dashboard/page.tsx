@@ -209,15 +209,30 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
   const [compatibleStatus, setCompatibleStatus] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. First check LocalStorage for persistent client-side cache
+    const cached = localStorage.getItem("sotarouter_providers_cache");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setProviders(parsed);
+          setLoading(false);
+        }
+      } catch {}
+    }
+
     let cancelled = false;
     void fetch("/api/providers", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json() as { success?: boolean; providers?: Provider[]; error?: string };
         if (!response.ok || !data.success) throw new Error(data.error || "Provider sync failed");
-        if (!cancelled) setProviders(data.providers || []);
+        if (!cancelled && data.providers && data.providers.length > 0) {
+          setProviders(data.providers);
+          localStorage.setItem("sotarouter_providers_cache", JSON.stringify(data.providers));
+        }
       })
       .catch(() => {
-        if (!cancelled) setImportStatus("Provider sync unavailable. Retry after the gateway is ready.");
+        if (!cancelled && !cached) setImportStatus("Provider sync unavailable. Retry after the gateway is ready.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -244,6 +259,7 @@ export function Dashboard({ initialTab = "overview" }: { initialTab?: Tab }) {
       const data = await response.json();
       if (!data.success) throw new Error(data.error || "Import failed");
       setProviders(data.providers);
+      localStorage.setItem("sotarouter_providers_cache", JSON.stringify(data.providers));
       setImportStatus(`Imported ${data.providers.length} provider connections.`);
       setTimeout(() => {
         setShowImport(false);
