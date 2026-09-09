@@ -87,6 +87,7 @@ export default function GenericProviderPage() {
   const [models, setModels] = useState<{ id: string; name: string; context: string; cost: string }[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(null);
+  const [modelSyncError, setModelSyncError] = useState<string | null>(null);
   const [copiedModel, setCopiedModel] = useState<string | null>(null);
   const [isTestingAll, setIsTestingAll] = useState(false);
   const [testAllProgress, setTestAllProgress] = useState("");
@@ -146,6 +147,7 @@ export default function GenericProviderPage() {
 
   const syncModels = useCallback(async () => {
     setModelsLoading(true);
+    setModelSyncError(null);
     try {
       const res = await fetch(`/api/models?provider=${encodeURIComponent(providerKey)}`, {
         cache: "no-store",
@@ -184,8 +186,9 @@ export default function GenericProviderPage() {
       }
 
       throw new Error(`No active ${providerKey} models returned`);
-    } catch {
-      setModels(PROVIDER_MODELS[providerKey] || DEFAULT_MODELS);
+    } catch (error) {
+      setModels([]);
+      setModelSyncError(error instanceof Error ? error.message : "Model discovery failed");
     } finally {
       setModelsLoading(false);
     }
@@ -563,6 +566,12 @@ export default function GenericProviderPage() {
             </div>
           </div>
 
+          {modelSyncError && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs font-mono text-rose-300">
+              <span>Model discovery failed: {modelSyncError}</span>
+              <button type="button" onClick={syncModels} className="shrink-0 text-rose-200 underline hover:text-white">Retry</button>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {modelsLoading ? (
               <div className="p-6 space-y-3 col-span-full">
